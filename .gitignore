@@ -1,0 +1,19 @@
+# Runtime working files
+ai-work-hub/
+TASKS.md
+LOG.md
+COMMAND.md
+OUTBOX.md
+TODO案.md
+LOG案.md
+TASKS案.md
+PROJECT_TODO.md
+DAILY_REVIEW.md
+
+# Backups
+*_backup_*.md
+
+# OS/editor
+.DS_Store
+Thumbs.db
+*.tmp
