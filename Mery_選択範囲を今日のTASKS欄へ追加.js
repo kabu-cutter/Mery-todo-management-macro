@@ -1,9 +1,9 @@
 ﻿#title = "選択範囲を今日のTASKS欄へ追加"
 
-// Mery タスク管理 v0.6.3
+// Mery タスク管理 v0.6.4
 // OUTBOX.md / TASKS案.md / PROJECT_TODO.md / COMMAND.md / 普通のメモなど、
 // 現在の選択範囲を TASKS.md の今日のセクション内へ追加します。
-// v0.6.3: サブ項目の見出しレベル差と二重三重チェック表記を吸収します。
+// v0.6.4: サブ項目の見出しレベル差と二重三重チェック表記を吸収します。
 // 標準形式: - [ ] 未完了 / - [x] 完了
 // 互換入力: - 項目 / - ✓ 項目 / ✓ 項目 / 済: 項目 / - [ ] 項目 / - [x] 項目
 
@@ -233,13 +233,91 @@ function normalizeTodayTasksText(text, todayHeading) {
         .replace(/\r\n/g, "\n")
         .replace(/\r/g, "\n");
 
-    var info = getTodaySectionInfo(normalized, todayHeading);
-    var blockResult = normalizeTodayBlock(info.block, todayHeading);
+    var collected = collectSameDayBlocksForReflect(normalized, todayHeading);
+
+    if (collected.blocks.length === 0) {
+        return {
+            changedText: normalized,
+            crossSectionDuplicateCount: 0
+        };
+    }
+
+    var combinedBlock = todayHeading + "\n\n";
+
+    for (var i = 0; i < collected.blocks.length; i++) {
+        combinedBlock += stripMainHeadingForReflect(collected.blocks[i], todayHeading) + "\n\n";
+    }
+
+    var blockResult = normalizeTodayBlock(combinedBlock, todayHeading);
 
     return {
-        changedText: info.before + blockResult.text + info.after,
+        changedText: collected.before + blockResult.text + collected.after,
         crossSectionDuplicateCount: blockResult.crossSectionDuplicateCount
     };
+}
+
+function collectSameDayBlocksForReflect(text, todayHeading) {
+    var starts = [];
+    var idx = text.indexOf(todayHeading, 0);
+
+    while (idx >= 0) {
+        if (idx === 0 || text.charAt(idx - 1) === "\n") {
+            starts.push(idx);
+        }
+
+        idx = text.indexOf(todayHeading, idx + todayHeading.length);
+    }
+
+    if (starts.length === 0) {
+        return {
+            before: text,
+            blocks: [],
+            after: ""
+        };
+    }
+
+    var blocks = [];
+    var firstStart = starts[0];
+    var lastEnd = -1;
+
+    for (var i = 0; i < starts.length; i++) {
+        var start = starts[i];
+        var end = findNextDatedTaskHeading(text, start + todayHeading.length);
+
+        if (end < 0) {
+            end = text.length;
+        }
+
+        blocks.push(text.substring(start, end));
+        lastEnd = end;
+    }
+
+    return {
+        before: text.substring(0, firstStart),
+        blocks: blocks,
+        after: text.substring(lastEnd)
+    };
+}
+
+function stripMainHeadingForReflect(blockText, todayHeading) {
+    var lines = String(blockText || "").split("\n");
+    var out = [];
+
+    for (var i = 0; i < lines.length; i++) {
+        var line = trim(lines[i]);
+
+        if (!line) {
+            continue;
+        }
+
+        if (line === todayHeading) {
+            continue;
+        }
+
+        out.push(lines[i]);
+    }
+
+    return out.join("\n");
 }
 
 function getTodaySectionInfo(text, todayHeading) {

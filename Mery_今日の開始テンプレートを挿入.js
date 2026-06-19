@@ -1,6 +1,6 @@
 ﻿#title = "今日の開始テンプレートを挿入"
 
-// Mery タスク管理 v0.6.0
+// Mery タスク管理 v0.6.4
 // TASKS.md に「今日の開始テンプレート」を挿入します。
 // 標準形式: - [ ] 未完了 / - [x] 完了
 
@@ -31,9 +31,14 @@ function main() {
         var heading = "## " + today + " 今日の作業";
 
         if (currentText.indexOf(heading) >= 0) {
-            if (!Confirm("今日の日付のセクションがすでにあります。\nもう一つ追加しますか？")) {
-                return;
+            try {
+                targetDoc.selection.StartOfDocument(false);
+                targetDoc.selection.Find(heading, meFindNext);
+            } catch (e) {
             }
+
+            alert("今日のTASKSセクションは既にあります。\n新しく追加せず、既存の今日分へ移動しました。\n\n重複している場合は「TASKS.md 今日分の重複項目を整理」を実行してください。");
+            return;
         }
 
         var template = buildStartTemplate(today);

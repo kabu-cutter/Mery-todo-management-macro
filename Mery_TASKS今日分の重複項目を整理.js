@@ -1,8 +1,8 @@
 ﻿#title = "TASKS今日分の重複項目を整理"
 
-// Mery タスク管理 v0.6.3
-// TASKS.md の今日のセクション内で、同名小見出しと重複項目を整理します。
-// v0.6.3: サブ項目の見出しレベル差と二重三重チェック表記を吸収します。
+// Mery タスク管理 v0.6.4
+// TASKS.md の今日のセクション内で、同じ日付ブロック・同名小見出し・重複項目を整理します。
+// v0.6.4: サブ項目の見出しレベル差と二重三重チェック表記を吸収します。
 // 例: ## 今日やる / ### 今日やる / #### 今日やる を同じ「今日やる」として扱います。
 // 標準形式: - [ ] 未完了 / - [x] 完了
 // 互換入力: - 項目 / - ✓ 項目 / ✓ 項目 / 済: 項目
@@ -76,7 +76,7 @@ function main() {
             && result.headingLevelFixedCount === 0
             && result.changedText === originalText
         ) {
-            alert("今日のTASKS内に、同名見出し・見出しレベル差・重複項目は見つかりませんでした。");
+            alert("今日のTASKS内に、同名見出し・見出しレベル差・重複した日付ブロック・重複項目は見つかりませんでした。");
             return;
         }
 
@@ -123,23 +123,97 @@ function normalizeTodayTasks(text, todayHeading) {
         .replace(/\r\n/g, "\n")
         .replace(/\r/g, "\n");
 
-    var start = normalized.indexOf(todayHeading);
-    var next = findNextDatedTaskHeading(normalized, start + todayHeading.length);
-    var end = next >= 0 ? next : normalized.length;
+    var collected = collectSameDayBlocks(normalized, todayHeading);
 
-    var before = normalized.substring(0, start);
-    var todayBlock = normalized.substring(start, end);
-    var after = normalized.substring(end);
+    if (collected.blocks.length === 0) {
+        return {
+            changedText: normalized,
+            mergedHeadingCount: 0,
+            removedDuplicateCount: 0,
+            crossSectionDuplicateCount: 0,
+            headingLevelFixedCount: 0
+        };
+    }
 
-    var blockResult = normalizeTodayBlock(todayBlock, todayHeading);
+    var combinedBlock = todayHeading + "\n\n";
+
+    for (var i = 0; i < collected.blocks.length; i++) {
+        combinedBlock += stripMainHeading(collected.blocks[i], todayHeading) + "\n\n";
+    }
+
+    var blockResult = normalizeTodayBlock(combinedBlock, todayHeading);
 
     return {
-        changedText: before + blockResult.text + after,
+        changedText: collected.before + blockResult.text + collected.after,
         mergedHeadingCount: blockResult.mergedHeadingCount,
         removedDuplicateCount: blockResult.removedDuplicateCount,
         crossSectionDuplicateCount: blockResult.crossSectionDuplicateCount,
         headingLevelFixedCount: blockResult.headingLevelFixedCount
     };
+}
+
+function collectSameDayBlocks(text, todayHeading) {
+    var starts = [];
+    var idx = text.indexOf(todayHeading, 0);
+
+    while (idx >= 0) {
+        if (idx === 0 || text.charAt(idx - 1) === "\n") {
+            starts.push(idx);
+        }
+
+        idx = text.indexOf(todayHeading, idx + todayHeading.length);
+    }
+
+    if (starts.length === 0) {
+        return {
+            before: text,
+            blocks: [],
+            after: ""
+        };
+    }
+
+    var blocks = [];
+    var firstStart = starts[0];
+    var lastEnd = -1;
+
+    for (var i = 0; i < starts.length; i++) {
+        var start = starts[i];
+        var end = findNextDatedTaskHeading(text, start + todayHeading.length);
+
+        if (end < 0) {
+            end = text.length;
+        }
+
+        blocks.push(text.substring(start, end));
+        lastEnd = end;
+    }
+
+    return {
+        before: text.substring(0, firstStart),
+        blocks: blocks,
+        after: text.substring(lastEnd)
+    };
+}
+
+function stripMainHeading(blockText, todayHeading) {
+    var lines = String(blockText || "").split("\n");
+    var out = [];
+
+    for (var i = 0; i < lines.length; i++) {
+        var line = trim(lines[i]);
+
+        if (!line) {
+            continue;
+        }
+
+        if (line === todayHeading) {
+            continue;
+        }
+
+        out.push(lines[i]);
+    }
+
+    return out.join("\n");
 }
 
 function findNextDatedTaskHeading(text, fromIndex) {
