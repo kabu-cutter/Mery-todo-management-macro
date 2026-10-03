@@ -17,3 +17,14 @@ DAILY_REVIEW.md
 .DS_Store
 Thumbs.db
 *.tmp
+
+# Google Calendar runtime data and credentials
+.mery-calendar/
+CALENDAR_SYNC_REPORT.md
+oauth-client.json
+client_secret*.json
+*.dpapi
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm

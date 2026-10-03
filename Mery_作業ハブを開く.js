@@ -115,14 +115,31 @@ function showFileInSingleTab(fullPath) {
 }
 
 function readUtf8Text(path) {
+    var fso = new ActiveXObject("Scripting.FileSystemObject");
+    if (!fso.FileExists(path)) {
+        return "";
+    }
+
+    // BOM を調べ、既存の UTF-16 ファイルも正しく読む。新規保存は UTF-8。
     var stream = new ActiveXObject("ADODB.Stream");
-    stream.Type = 2; // text
-    stream.Charset = "utf-8";
-    stream.Open();
-    stream.LoadFromFile(path);
-    var text = stream.ReadText();
-    stream.Close();
-    return text;
+    try {
+        stream.Type = 2;
+        stream.Charset = "iso-8859-1";
+        stream.Open();
+        stream.LoadFromFile(path);
+        var prefix = stream.ReadText(3);
+        stream.Position = 0;
+        if (prefix.charCodeAt(0) === 255 && prefix.charCodeAt(1) === 254) {
+            stream.Charset = "unicode";
+        } else if (prefix.charCodeAt(0) === 254 && prefix.charCodeAt(1) === 255) {
+            stream.Charset = "unicodeFFFE";
+        } else {
+            stream.Charset = "utf-8";
+        }
+        return stream.ReadText().replace(/^\uFEFF/, "");
+    } finally {
+        if (stream.State !== 0) stream.Close();
+    }
 }
 
 function writeUtf8Text(path, text) {

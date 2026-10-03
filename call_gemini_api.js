@@ -40,6 +40,7 @@ const doc = document ;
 const sel = document . selection ;
 let abortRequestFlg = false ;
 let requestCompletedFlg = false ;
+let activeRequestController = null ;
 
 main ();
 
@@ -70,7 +71,7 @@ async function main () {
         const result = await Promise . all ([ callGeminiAPI ( apiKey , promptText , isTemplate ), abortRequest () ]);
         const responseData = result [ 0 ];
 
-        if ( responseData && responseData.responseAll && hasOutputPath ()) {
+        if ( responseData && ! responseData.aborted && ! abortRequestFlg && responseData.responseAll && hasOutputPath ()) {
             const outputPath = getTagText ( OUTPUT_PATH_TAG );
             const outputTitle = getTagText ( OUTPUT_TITLE_TAG ) || "Gemini 出力";
             const outputText = buildOutputFileText ( outputTitle , responseData.responseAll , responseData.usageText );
@@ -97,6 +98,7 @@ async function abortRequest () {
             pressCount ++ ;
             if ( pressCount > 2 ) {
                 abortRequestFlg = true ;
+                if ( activeRequestController ) activeRequestController.abort ();
                 return ;
             }
         }
@@ -105,6 +107,7 @@ async function abortRequest () {
 
 async function callGeminiAPI ( apiKey , promptText , isTemplate ) {
     const controller = new AbortController ();
+    activeRequestController = controller;
     const signal = controller . signal ;
     try {
         const requestBody = {
@@ -141,6 +144,7 @@ async function callGeminiAPI ( apiKey , promptText , isTemplate ) {
             }
             const { done , value } = await reader . read ();
             if ( done ) {
+                buffer += decoder.decode ();
                 if ( buffer . trim (). length > 0 ) {
                     try {
                         const lastLine = buffer . trim (). replace ( /^data:\s*/ , '' );
@@ -161,7 +165,7 @@ async function callGeminiAPI ( apiKey , promptText , isTemplate ) {
                 break ;
             }
 
-            const text = decoder . decode ( value );
+            const text = decoder . decode ( value , { stream : true } );
             const combinedText = buffer + text ;
             const lastNewlineIndex = combinedText . lastIndexOf ( '\n' );
             if ( lastNewlineIndex === - 1 ) {
@@ -210,10 +214,15 @@ async function callGeminiAPI ( apiKey , promptText , isTemplate ) {
     }
     catch ( e ) {
         controller . abort ();
+        if ( abortRequestFlg ) {
+            outputBar.Writeln("\n<ユーザーにより処理が中止されました>");
+            return { responseAll : "" , usageText : "" , aborted : true };
+        }
         throw e ;
     }
     finally {
         requestCompletedFlg = true ;
+        activeRequestController = null;
     }
 }
 
@@ -432,13 +441,17 @@ function showTextInSingleTab ( fullPath , text ) {
     }
 }
 
-function writeTextFile ( fullPath , text ) {
-    // FSO の Unicode=true は UTF-16LE で保存する。
-    // Mery では通常そのまま読めるので、まずは安定性優先でこの方式にする。
-    const fso = new ActiveXObject ( "Scripting.FileSystemObject" );
-    const file = fso . CreateTextFile ( fullPath , true , true );
-    file . Write ( text );
-    file . Close ();
+function writeTextFile(path, text) {
+    var stream = new ActiveXObject("ADODB.Stream");
+    try {
+        stream.Type = 2;
+        stream.Charset = "utf-8";
+        stream.Open();
+        stream.WriteText(text);
+        stream.SaveToFile(path, 2);
+    } finally {
+        if (stream.State !== 0) stream.Close();
+    }
 }
 
 function findOpenDocumentByFullName ( fullPath ) {

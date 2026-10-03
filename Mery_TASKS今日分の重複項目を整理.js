@@ -174,7 +174,8 @@ function collectSameDayBlocks(text, todayHeading) {
 
     var blocks = [];
     var firstStart = starts[0];
-    var lastEnd = -1;
+    var lastEnd = firstStart;
+    var remaining = "";
 
     for (var i = 0; i < starts.length; i++) {
         var start = starts[i];
@@ -184,6 +185,8 @@ function collectSameDayBlocks(text, todayHeading) {
             end = text.length;
         }
 
+        // 統合対象の間にある別の日付や本文を捨てずに残す。
+        remaining += text.substring(lastEnd, start);
         blocks.push(text.substring(start, end));
         lastEnd = end;
     }
@@ -191,7 +194,7 @@ function collectSameDayBlocks(text, todayHeading) {
     return {
         before: text.substring(0, firstStart),
         blocks: blocks,
-        after: text.substring(lastEnd)
+        after: remaining + text.substring(lastEnd)
     };
 }
 
@@ -735,37 +738,38 @@ function readTextFile(path) {
         return "";
     }
 
+    // BOM を調べ、既存の UTF-16 ファイルも正しく読む。新規保存は UTF-8。
+    var stream = new ActiveXObject("ADODB.Stream");
     try {
-        var stream = new ActiveXObject("ADODB.Stream");
         stream.Type = 2;
-        stream.Charset = "utf-8";
+        stream.Charset = "iso-8859-1";
         stream.Open();
         stream.LoadFromFile(path);
-        var text = stream.ReadText();
-        stream.Close();
-        return text;
-    } catch (e) {
-        var file = fso.OpenTextFile(path, 1, false, -1);
-        var fallback = file.ReadAll();
-        file.Close();
-        return fallback;
+        var prefix = stream.ReadText(3);
+        stream.Position = 0;
+        if (prefix.charCodeAt(0) === 255 && prefix.charCodeAt(1) === 254) {
+            stream.Charset = "unicode";
+        } else if (prefix.charCodeAt(0) === 254 && prefix.charCodeAt(1) === 255) {
+            stream.Charset = "unicodeFFFE";
+        } else {
+            stream.Charset = "utf-8";
+        }
+        return stream.ReadText().replace(/^\uFEFF/, "");
+    } finally {
+        if (stream.State !== 0) stream.Close();
     }
 }
 
 function writeTextFile(path, text) {
+    var stream = new ActiveXObject("ADODB.Stream");
     try {
-        var stream = new ActiveXObject("ADODB.Stream");
         stream.Type = 2;
         stream.Charset = "utf-8";
         stream.Open();
         stream.WriteText(text);
         stream.SaveToFile(path, 2);
-        stream.Close();
-    } catch (e) {
-        var fso = new ActiveXObject("Scripting.FileSystemObject");
-        var file = fso.CreateTextFile(path, true, true);
-        file.Write(text);
-        file.Close();
+    } finally {
+        if (stream.State !== 0) stream.Close();
     }
 }
 
