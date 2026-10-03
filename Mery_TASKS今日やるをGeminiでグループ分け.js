@@ -86,7 +86,6 @@ function renderGrouping(state,plan){
     if(state.notes.length){out.push("","#### 補足");for(i=0;i<state.notes.length;i++)out.push(state.notes[i]);}out.push("");
     var lines=state.source.split("\n");return lines.slice(0,state.start).concat(out,lines.slice(state.stop)).join("\n");
 }
-
 function selectAllDocument(doc) {
     doc.selection.StartOfDocument(false);
     doc.selection.EndOfDocument(true);

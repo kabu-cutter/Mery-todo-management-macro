@@ -1,5 +1,4 @@
 更新: 単一ファイル版は TODO を My Tasks、LOG をカレンダーに同期します。設定は [README_Google_Tasks.md](README_Google_Tasks.md) を参照してください。
-
 # Mery と Google カレンダーの双方向同期
 
 TASKS.md と LOG.md を、既存の Google メインカレンダーと同期します。

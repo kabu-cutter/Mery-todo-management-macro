@@ -48,7 +48,6 @@ Google Tasks API は時刻を扱えないため、TASKS に書いた `@09:30-10:
 実際の Google アカウントへの接続と登録は、上の設定後にユーザーが実行してください。開発時は模擬 API で検証しています。
 
 参考: [Google Tasks API](https://developers.google.com/workspace/tasks/reference/rest)、[認証スコープ](https://developers.google.com/workspace/tasks/auth)
-
 ## ID別ファイル方式
 
 TASKS.md と .mery-calendar/tasks-ids.json、	asks.sqlite はセットで保管してください。本文の名前変更・完了切替・並べ替え・追加・削除は照合します。同名項目の削除などIDを特定できない編集は停止するため、項目名を区別したり、編集と追加を分けて同期してください。初回移行はプレビューでは行わず、同期実行時にバックアップを作って行います。移行後は古いマクロで同期せず、この更新版を使ってください。

@@ -52,7 +52,6 @@ Google同期はユーザー環境で実行確認されています。新しい�
 
 提案生成には既存の `GEMINI_API_KEY` と `call_gemini_api.js` を使います。元の文書は反映前にバックアップします。Google から同日の「今日やる」にあるタスクを更新するときは、そのグループ内の位置を保持します。
 
-
 ## 主な機能
 
 - `TASKS.md` / `LOG.md` / `COMMAND.md` / `OUTBOX.md` などの作業ハブを開く
@@ -360,7 +359,6 @@ node tests/run.cjs
 作業メニューの同期マクロは単一ファイルで実行できます。Node.js 24 以上、Google Calendar API / Google Tasks API、デスクトップ用OAuth認証JSONが必要です。TASKSとプロジェクトTODOはMy Tasksへ、LOGはメインカレンダーへ双方向同期します。初期設定は [Google Tasks 同期の手順](README_Google_Tasks.md)、従来のカレンダー処理は [Google Calendar の手順](README_Google_Calendar.md) を参照してください。同期IDと前回の状態は .mery-calendar に保存されるため、このフォルダーと文書をセットで保管してください。既存のTASKSカレンダー予定は残し、更新版では更新・削除しません。
 
 同期テスト: `node --test tests/calendar.cjs`
-
 ## 開発用の検証
 
 Node.js 24 以上で実行します。
