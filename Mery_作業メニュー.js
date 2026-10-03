@@ -15,6 +15,8 @@ var MENU_GEMINI_PRIORITY_TODAY = 9;
 var MENU_INSERT_TASKS_SECTION = 10;
 var MENU_TASKS_TO_LOG = 11;
 var MENU_REFLECT_OUTBOX_END = 12;
+var MENU_GOOGLE_CALENDAR = 13;
+var MENU_GEMINI_GROUP_TODAY = 14;
 
 var MACRO_OPEN_HUB = "Mery_作業ハブを開く.js";
 var MACRO_START_TEMPLATE = "Mery_今日の開始テンプレートを挿入.js";
@@ -28,6 +30,8 @@ var MACRO_GEMINI_PRIORITY_TODAY = "Mery_TASKS今日やるをGeminiで優先度�
 var MACRO_INSERT_TASKS_SECTION = "Mery_選択範囲を今日のTASKS欄へ追加.js";
 var MACRO_TASKS_TO_LOG = "Mery_TASKS選択項目をLOGへ記録.js";
 var MACRO_REFLECT_OUTBOX_END = "Mery_OUTBOX選択範囲を末尾に反映.js";
+var MACRO_GEMINI_GROUP_TODAY = "Mery_TASKS今日やるをGeminiでグループ分け.js";
+var MACRO_GOOGLE_CALENDAR = "Mery_Googleカレンダーと同期.js";
 
 main();
 
@@ -46,10 +50,13 @@ function main() {
         menu.Add("Geminiで選択範囲をタスク整理", MENU_GEMINI_TASK);
         menu.Add("TASKS.md今日分をGeminiで整理", MENU_GEMINI_TASKS_TODAY);
         menu.Add("今日やる優先度をGeminiで整理", MENU_GEMINI_PRIORITY_TODAY);
+        menu.Add("今日やるをGeminiでグループ分け・反映", MENU_GEMINI_GROUP_TODAY);
         menu.Add("", 0, meMenuSeparator);
         menu.Add("選択範囲を今日のTASKS欄へ追加", MENU_INSERT_TASKS_SECTION);
         menu.Add("TASKS選択項目をLOGへ記録", MENU_TASKS_TO_LOG);
         menu.Add("OUTBOX選択範囲を末尾に反映", MENU_REFLECT_OUTBOX_END);
+        menu.Add("", 0, meMenuSeparator);
+        menu.Add("Google カレンダーと双方向同期", MENU_GOOGLE_CALENDAR);
 
         var selected = menu.Track(0);
         if (selected === 0) return;
@@ -66,6 +73,8 @@ function main() {
         if (selected === MENU_INSERT_TASKS_SECTION) return runMacro(MACRO_INSERT_TASKS_SECTION);
         if (selected === MENU_TASKS_TO_LOG) return runMacro(MACRO_TASKS_TO_LOG);
         if (selected === MENU_REFLECT_OUTBOX_END) return runMacro(MACRO_REFLECT_OUTBOX_END);
+        if (selected === MENU_GEMINI_GROUP_TODAY) return runMacro(MACRO_GEMINI_GROUP_TODAY);
+        if (selected === MENU_GOOGLE_CALENDAR) return runMacro(MACRO_GOOGLE_CALENDAR);
 
     } catch (e) {
         alert("エラー: " + e.message);

@@ -135,17 +135,39 @@ function readTextFile(path) {
         return "";
     }
 
-    var file = fso.OpenTextFile(path, 1, false, -1);
-    var text = file.ReadAll();
-    file.Close();
-    return text;
+    // BOM を調べ、既存の UTF-16 ファイルも正しく読む。新規保存は UTF-8。
+    var stream = new ActiveXObject("ADODB.Stream");
+    try {
+        stream.Type = 2;
+        stream.Charset = "iso-8859-1";
+        stream.Open();
+        stream.LoadFromFile(path);
+        var prefix = stream.ReadText(3);
+        stream.Position = 0;
+        if (prefix.charCodeAt(0) === 255 && prefix.charCodeAt(1) === 254) {
+            stream.Charset = "unicode";
+        } else if (prefix.charCodeAt(0) === 254 && prefix.charCodeAt(1) === 255) {
+            stream.Charset = "unicodeFFFE";
+        } else {
+            stream.Charset = "utf-8";
+        }
+        return stream.ReadText().replace(/^\uFEFF/, "");
+    } finally {
+        if (stream.State !== 0) stream.Close();
+    }
 }
 
 function writeTextFile(path, text) {
-    var fso = new ActiveXObject("Scripting.FileSystemObject");
-    var file = fso.CreateTextFile(path, true, true);
-    file.Write(text);
-    file.Close();
+    var stream = new ActiveXObject("ADODB.Stream");
+    try {
+        stream.Type = 2;
+        stream.Charset = "utf-8";
+        stream.Open();
+        stream.WriteText(text);
+        stream.SaveToFile(path, 2);
+    } finally {
+        if (stream.State !== 0) stream.Close();
+    }
 }
 
 function normalizePath(path) {

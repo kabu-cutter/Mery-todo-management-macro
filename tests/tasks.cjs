@@ -1,0 +1,37 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const tasks=require('../calendar-sync/tasks-sync.cjs');
+test('My Tasks edits move a tracked TASKS item to 今日やる without duplicating it',()=>{
+ const p=tasks.parse('## 2026-10-03 (土) 今日の作業\n### 次にやる\n- [ ] original\n### メモ\n- keep this note\n','TASKS.md',true);
+ const changed=tasks.updateDocument(p.text,p.items[0],{text:'Google edit',done:true,date:'2026-10-02'},'2026-10-03');
+ const parsed=tasks.parse(changed,'TASKS.md',true);
+ assert.equal(parsed.items.length,1);assert.equal(parsed.items[0].section,'今日やる');assert.equal(parsed.items[0].id,p.items[0].id);assert.equal(parsed.items[0].done,true);assert.equal(parsed.items[0].text,'Google edit');assert.match(changed,/- keep this note/);
+});
+test('Google Tasks date moves TASKS item and retains local time',()=>{const file='TASKS.md',p=tasks.parse('## 2026-10-03 (土) 今日の作業\n### 今日やる\n- [ ] task @09:00-10:00\n',file,true);const text=tasks.updateDocument(p.text,p.items[0],{text:'edited',done:true,date:'2026-10-04'},'2026-10-03');const item=tasks.parse(text,file,true).items[0];assert.equal(item.date,'2026-10-03');assert.equal(item.start,'09:00');assert.equal(item.done,true);});
+test('Tasks list pagination preserves every page',async()=>{let calls=0;const items=await tasks.pages({tasksRequest:async(m,r)=>{calls++;return r.includes('pageToken=next')?{items:[{id:'2'}]}:{items:[{id:'1'}],nextPageToken:'next'};}},'users/@me/lists');assert.equal(calls,2);assert.equal(items.length,2);});
+test('TODO parser handles nesting and fences; markers stable',()=>{const p=tasks.parse('# TODO\n  - [ ] 日本語\n```\n- [ ] example\n```','TODO.md',false);assert.equal(p.items.length,1);assert.equal(tasks.parse(p.text,'TODO.md',false).items[0].id,p.items[0].id);const updated=tasks.updateDocument(p.text,p.items[0],{text:'変更',done:true,date:'2026-10-04'});const r=tasks.parse(updated,'TODO.md',false).items[0];assert.equal(r.done,true);assert.equal(r.date,'2026-10-04');assert.match(updated,/  - \[x\]/);});
+test('invalid date and unparseable tracked TODO rejected',()=>{assert.throws(()=>tasks.parse('- [ ] a <!-- mery-due:2026-02-30 -->','x',false));assert.throws(()=>tasks.parse('removed checkbox <!-- mery-calendar:'+'a'.repeat(32)+' -->','x',false));});
+test('My Tasks retry, pull, conflicts, deletion and preview',async()=>{
+ const hub=fs.mkdtempSync(path.join(os.tmpdir(),'mery-tasks-test-')),dir=path.join(hub,'.mery-calendar');fs.mkdirSync(dir);
+ const file=path.join(hub,'TASKS.md'),todo=path.join(hub,'TODO.md');fs.writeFileSync(file,'# TASKS\n## 2026-06-19 (金) 今日の作業\n### 後で\n- [ ] task\n');fs.writeFileSync(todo,'# TODO\n- [ ] project\n');
+ const config={hub,dir,calendarId:'account',todoPaths:[todo],today:'2026-10-03'},remote=[];let count=0;
+ const api={tasksRequest:async(method,route,body)=>{if(route.startsWith('users/'))return {items:[{id:'mytasks',title:'My Tasks'}]};if(method==='GET')return {items:remote};if(method==='POST'){const r={...body,id:String(++count),etag:'e'};remote.push(r);return r;}const r=remote.find(x=>route.endsWith('/'+x.id));if(method==='PATCH'){Object.assign(r,body);return r;}if(method==='DELETE'){r.deleted=true;return null;}throw Error('unexpected');}};
+ await tasks.run(config,api,false);assert.equal(count,0);assert.doesNotMatch(fs.readFileSync(todo,'utf8'),/mery-calendar/);
+ await tasks.run(config,api,true);assert.equal(count,2);
+ assert.doesNotMatch(fs.readFileSync(file,'utf8'),/mery-calendar/);assert.ok(fs.existsSync(path.join(dir,'tasks-ids.json')));assert.ok(remote.every(x=>!x.notes?.includes('Mery sync:')));
+ const placement=await tasks.run(config,api,false);assert.match(placement,/Mery 配置更新: task/);assert.match(placement,/反映先: 2026-10-03 \/ 今日やる/);
+ await tasks.run(config,api,true);assert.equal(count,2);const placed=tasks.parse(fs.readFileSync(file,'utf8'),file,true).items[0];assert.equal(placed.date,'2026-10-03');assert.equal(placed.section,'今日やる');
+ remote.find(x=>x.title==='project').title='remote edit';await tasks.run(config,api,true);assert.match(fs.readFileSync(todo,'utf8'),/remote edit/);
+ fs.writeFileSync(todo,fs.readFileSync(todo,'utf8').replace('remote edit','local edit'));remote.find(x=>x.title==='remote edit').title='other edit';assert.match(await tasks.run(config,api,true),/競合/);assert.match(fs.readFileSync(todo,'utf8'),/local edit/);
+ const remoteTask=remote.find(x=>x.title==='task');remoteTask.title='Google changed';remoteTask.status='completed';remoteTask.due='2026-08-05T00:00:00Z';
+ const before=fs.readFileSync(file,'utf8'),preview=await tasks.run(config,api,false);assert.match(preview,/Mery 更新: Google changed/);assert.match(preview,/反映先: 2026-10-03 \/ 今日やる/);assert.equal(fs.readFileSync(file,'utf8'),before);
+ await tasks.run(config,api,true);let pulled=tasks.parse(fs.readFileSync(file,'utf8').replace(/^\uFEFF/,''),file,true).items[0];assert.equal(pulled.text,'Google changed');assert.equal(pulled.date,'2026-10-03');assert.equal(pulled.done,true);assert.equal(pulled.section,'今日やる');
+ assert.doesNotMatch(await tasks.run(config,api,true),/Google 更新: Google changed/);assert.equal(remoteTask.due.slice(0,10),'2026-08-05');
+ fs.writeFileSync(file,fs.readFileSync(file,'utf8').replace('Google changed','Local rename'));await tasks.run(config,api,true);assert.equal(remoteTask.title,'Local rename');assert.equal(remoteTask.due.slice(0,10),'2026-08-05');
+ remoteTask.deleted=true;await tasks.run(config,api,true);assert.doesNotMatch(fs.readFileSync(file,'utf8'),/- \[x\] Local rename/);
+ remote.push({id:'untracked-task',title:'TASKS.mdのアーカイブ実装時期の検討',status:'needsAction',due:'2026-06-19T00:00:00Z',etag:'new'});
+ const importPreview=await tasks.run(config,api,false);assert.match(importPreview,/Mery 新規取込: TASKS.mdのアーカイブ実装時期の検討/);assert.doesNotMatch(importPreview,/Google ID:/);assert.doesNotMatch(fs.readFileSync(file,'utf8'),/アーカイブ実装時期/);
+ await tasks.run(config,api,true);const imported=tasks.parse(fs.readFileSync(file,'utf8'),file,true).items[0];assert.equal(imported.date,'2026-10-03');assert.equal(imported.section,'今日やる');assert.equal(imported.text,'TASKS.mdのアーカイブ実装時期の検討');
+ remote.at(-1).title='アーカイブ時期を再検討';await tasks.run(config,api,true);assert.match(fs.readFileSync(file,'utf8'),/アーカイブ時期を再検討/);await tasks.run(config,api,true);assert.equal(tasks.parse(fs.readFileSync(file,'utf8'),file,true).items.length,1);assert.equal(count,2);
+ await assert.rejects(tasks.run({...config,todoPaths:[]},api,true),/対象から外れ/);
+});
