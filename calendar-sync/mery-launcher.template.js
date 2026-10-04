@@ -1,4 +1,4 @@
-﻿#title = "My Tasks / LOG と双方向同期"
+#title = "My Tasks / LOG と双方向同期"
 
 // Node.js 24 以上が必要です。Google 認証と初期設定は README_Google_Calendar.md を参照。
 var HUB_DIR = "C:\\Projects\\ai-work-hub";
@@ -18,8 +18,27 @@ function main() {
         menu.Add("Google カレンダー / Tasks の接続設定", 1);
         menu.Add("同期内容をプレビュー（予定・TASKS・LOGは変更しない）", 2);
         menu.Add("TODO → My Tasks / LOG → カレンダーを双方向同期", 3);
+        menu.Add("処理状況・結果を確認", 4);
         var selected = menu.Track(0);
         if (selected === 0) return;
+        var statusPath = HUB_DIR + "\\.mery-calendar\\run-status.json";
+        if (selected === 4) {
+            if (!fso.FileExists(statusPath)) { alert("まだ処理状況がありません。接続設定またはプレビューを実行してください。"); return; }
+            var current = JSON.parse(readUtf8Text(statusPath));
+            if (current.phase === "running" || current.phase === "queued") {
+                showStatusMessage("処理中です。少し待ってから、もう一度結果を確認してください。\n開始: " + current.startedAt); return;
+            }
+            if (current.mode === "--sync") reloadOpenHubDocuments();
+            var finishedReport = HUB_DIR + "\\CALENDAR_SYNC_REPORT.md";
+            if (fso.FileExists(finishedReport)) showReport(finishedReport);
+            if (!fso.FileExists(finishedReport)) showStatusMessage("処理は終了しましたが、レポートがありません。接続設定と Node.js を確認してください。");
+            return;
+        }
+        if (fso.FileExists(HUB_DIR + "\\.mery-calendar\\sync.lock")) throw new Error("別の同期処理が実行中です。処理状況を確認してください。");
+        if (fso.FileExists(statusPath)) {
+            var pending = JSON.parse(readUtf8Text(statusPath));
+            if (pending.phase === "queued" && new Date().getTime() - pending.startedMs < 60000) throw new Error("処理を起動しています。少し待ってから状況を確認してください。");
+        }
 
         if (selected !== 1) {
             if (!Confirm("開いている TASKS.md / LOG.md / TODO.md の編集を保存して処理します。\n"
@@ -30,14 +49,21 @@ function main() {
 
         var mode = selected === 1 ? "--auth" : selected === 2 ? "--preview" : "--sync";
         var runner = new ActiveXObject("WScript.Shell");
-        var status = runner.Run(quoteArg(NODE_EXE) + " " + quoteArg(helper) + " --hub " + quoteArg(HUB_DIR) + " " + mode + " --tasks", 0, true);
-        if (selected === 3) reloadOpenHubDocuments();
-        var reportPath = HUB_DIR + "\\CALENDAR_SYNC_REPORT.md";
-        if (fso.FileExists(reportPath)) showReport(reportPath);
-        alert(status === 0 ? "処理が完了しました。同期レポートを確認してください。" : "処理を完了できませんでした。同期レポートと Node.js / Google 接続設定を確認してください。");
+        writeRunStatus(statusPath, JSON.stringify({phase:"queued",mode:mode,startedAt:new Date().toLocaleString(),startedMs:new Date().getTime()}));
+        var progressPath = HUB_DIR + "\\.mery-calendar\\progress.html";
+        writeRunStatus(progressPath, "<!doctype html><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"1\"><title>Mery 同期</title><p>同期処理を起動しています…</p>");
+        runner.Run(quoteArg(NODE_EXE) + " " + quoteArg(helper) + " --hub " + quoteArg(HUB_DIR) + " " + mode + " --tasks", 0, false);
+        runner.Run(quoteArg(progressPath), 1, false);
+        showStatusMessage("進捗画面を開きました。\n完了後、このマクロの「処理状況・結果を確認」を選んでください。\n同期中の TASKS.md / LOG.md / TODO.md の編集は、完了後に行ってください。");
     } catch (e) {
         alert("Google カレンダー同期エラー: " + e.message);
     }
+}
+
+function writeRunStatus(path, text) {
+    var stream = new ActiveXObject("ADODB.Stream");
+    try { stream.Type=2; stream.Charset="utf-8"; stream.Open(); stream.WriteText(text); stream.SaveToFile(path,2); }
+    finally { if (stream.State !== 0) stream.Close(); }
 }
 
 function quoteArg(value) {
@@ -133,3 +159,9 @@ function readUtf8Text(path) {
     }
 }
 
+
+function showStatusMessage(text) {
+    var path = HUB_DIR + "\\SYNC_STATUS.md";
+    writeRunStatus(path, "# Google 同期の処理状況\n\n" + text + "\n" );
+    showReport(path);
+}

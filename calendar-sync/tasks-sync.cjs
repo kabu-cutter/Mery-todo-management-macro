@@ -36,7 +36,8 @@ function updateDocument(doc,item,remote,today=todayDate()){
   const lines=doc.split('\n'),index=lines.findIndex(x=>x.match(marker)?.[1]===item.id);if(index<0)throw Error('TODO 項目が見つかりません。');
   if(!remote)lines.splice(index,1);else{const prefix=lines[index].match(/^(\s*[-*]\s+)\[[ xX]\]\s*/)[1];lines[index]=prefix+'['+(remote.done?'x':' ')+'] '+remote.text+(remote.date?' <!-- mery-due:'+remote.date+' -->':'')+' <!-- mery-calendar:'+item.id+' -->';}return lines.join('\n');
 }
-async function run(config,api,apply){
+async function run(config,api,apply,onProgress=()=>{}){
+  onProgress({stage:"My Tasks のリストを確認しています",done:null,total:null,item:""});
   const lists=await pages(api,'users/@me/lists',{maxResults:'100'});
   const list=config.taskListId?lists.find(x=>x.id===config.taskListId):lists.find(x=>x.title==='My Tasks');
   if(!list)throw Error('My Tasks が見つかりません。.mery-calendar/config.json の taskListId に対象リストIDを指定してください。利用可能: '+lists.map(x=>x.title+' / '+x.id).join(', '));
@@ -60,12 +61,15 @@ async function run(config,api,apply){
     if(!snapshots.length&&state.size&&![...local.keys()].some(id=>state.has(id))&&[...state.values()].some(b=>b.file===files[0]))throw Error('TASKS のIDファイルがありません。IDを削除する前の TASKS.md または tasks-ids.json を復元してください。');
     for(const b of state.values())if(!docs.has(b.file))throw Error('同期済み TODO が対象から外れています。todoPaths に戻してください: '+b.file);
     const route='lists/'+encodeURIComponent(list.id)+'/tasks';
+    onProgress({stage:"My Tasks の項目を読み込んでいます"});
     const remoteList=await pages(api,route,{maxResults:'100',showCompleted:'true',showDeleted:'true',showHidden:'true'}),remote=new Map();
     for(const r of remoteList){let id=[...state].find(([,b])=>b.remoteId===r.id)?.[0]||r.notes?.match(/^Mery sync: ([a-f0-9]{32})$/m)?.[1];if(!id){if(r.deleted||r.hidden)continue;id=crypto.createHash('sha256').update(list.id+'\0'+r.id).digest('hex').slice(0,32);}if(remote.has(id))throw Error('My Tasks の同期IDが重複しています。');remote.set(id,{...r,text:r.title||'',done:r.status==='completed',date:r.due?.slice(0,10)||''});}
     const today=config.today||todayDate();
     summary+='リスト: '+list.title+' / Google取得: '+remoteList.length+'件 / 同期対象: '+local.size+'件 / 照合済み: '+remote.size+'件\n\n';
     if(apply){db.prepare('INSERT OR IGNORE INTO binding VALUES(1,?,?)').run(config.calendarId,list.id);for(const [file,d] of docs)if(file===files[0]||d.text!==decode(d.original))saveDocument(file,d.text,d);}
-    for(const id of new Set([...local.keys(),...state.keys(),...remote.keys()])){
+    const allIds=[...new Set([...local.keys(),...state.keys(),...remote.keys()])];let processed=0;
+    for(const id of allIds){
+      onProgress({stage:apply?"My Tasks を同期しています":"My Tasks の変更を確認しています",done:processed++,total:allIds.length,item:local.get(id)?.text||remote.get(id)?.text||state.get(id)?.local.text||""});
       const l=local.get(id),r=remote.get(id),b=state.get(id);let action;
       if(apply&&r&&b?.remoteId===r.id&&r.notes?.split(/\r?\n/).includes('Mery sync: '+id)){
         try{const notes=r.notes.split(/\r?\n/).filter(line=>line!=='Mery sync: '+id).join('\n');const updated=await api.tasksRequest('PATCH',route+'/'+encodeURIComponent(r.id),{notes},r.etag);r.notes=notes;r.etag=updated?.etag||r.etag;}
@@ -102,6 +106,7 @@ async function run(config,api,apply){
         }
       }catch(error){summary+='  エラー: '+error.message+'\n';process.exitCode=1;}
     }
+    onProgress({stage:'My Tasks の処理完了',done:allIds.length,total:allIds.length,item:''});
     return summary+'\n対象: '+files.join(', ')+'\n';
   }finally{db.close();}
 }

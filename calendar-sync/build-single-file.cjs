@@ -2,7 +2,7 @@
 const fs=require('node:fs');
 const path=require('node:path');
 const dir=__dirname;
-const names=['task-identities.cjs','tasks-sync.cjs','calendar-sync-core.cjs','calendar-google.cjs','calendar-store.cjs','calendar-sync.cjs'];
+const names=['progress.cjs','task-identities.cjs','tasks-sync.cjs','calendar-sync-core.cjs','calendar-google.cjs','calendar-store.cjs','calendar-sync.cjs'];
 const definitions=names.map(name=>JSON.stringify(name)+': function(require, module, exports, __filename, __dirname) {\n'+fs.readFileSync(path.join(dir,name),'utf8')+'\n}').join(',\n');
 const runtime=`'use strict';
 const __path = require('node:path');

@@ -1,0 +1,3 @@
+const {test}=require('node:test'),assert=require('node:assert/strict');const {render}=require('../calendar-sync/progress.cjs');
+test('active progress refreshes automatically and escapes task text',()=>{const html=render({phase:'running',stage:'My Tasks',done:2,total:10,item:'<script>alert(1)</script>'});assert.ok(html.includes('content="1"'));assert.ok(html.includes('2 / 10'));assert.ok(!html.includes('<script>'));assert.ok(html.includes('&lt;script&gt;'));});
+test('finished progress stops refreshing and distinguishes errors',()=>{assert.ok(!render({phase:'completed',ok:true}).includes('http-equiv'));assert.ok(render({phase:'completed',ok:false,error:'failed'}).includes('failed'));});
