@@ -1,4 +1,4 @@
-﻿#title = "Mery作業メニュー"
+#title = "Mery作業メニュー"
 
 // Mery タスク管理 v0.6.5
 // クリック用ランチャーマクロ。
@@ -17,6 +17,7 @@ var MENU_TASKS_TO_LOG = 11;
 var MENU_REFLECT_OUTBOX_END = 12;
 var MENU_GOOGLE_CALENDAR = 13;
 var MENU_GEMINI_GROUP_TODAY = 14;
+var MENU_RANDOM_TODAY = 15;
 
 var MACRO_OPEN_HUB = "Mery_作業ハブを開く.js";
 var MACRO_START_TEMPLATE = "Mery_今日の開始テンプレートを挿入.js";
@@ -51,6 +52,7 @@ function main() {
         menu.Add("TASKS.md今日分をGeminiで整理", MENU_GEMINI_TASKS_TODAY);
         menu.Add("今日やる優先度をGeminiで整理", MENU_GEMINI_PRIORITY_TODAY);
         menu.Add("今日やるをGeminiでグループ分け・反映", MENU_GEMINI_GROUP_TODAY);
+        menu.Add("今日やるをランダムに並べ替える", MENU_RANDOM_TODAY);
         menu.Add("", 0, meMenuSeparator);
         menu.Add("選択範囲を今日のTASKS欄へ追加", MENU_INSERT_TASKS_SECTION);
         menu.Add("TASKS選択項目をLOGへ記録", MENU_TASKS_TO_LOG);
@@ -73,6 +75,7 @@ function main() {
         if (selected === MENU_INSERT_TASKS_SECTION) return runMacro(MACRO_INSERT_TASKS_SECTION);
         if (selected === MENU_TASKS_TO_LOG) return runMacro(MACRO_TASKS_TO_LOG);
         if (selected === MENU_REFLECT_OUTBOX_END) return runMacro(MACRO_REFLECT_OUTBOX_END);
+        if (selected === MENU_RANDOM_TODAY) return runMacro("Mery_TASKS今日やるをランダムに並べ替える.js");
         if (selected === MENU_GEMINI_GROUP_TODAY) return runMacro(MACRO_GEMINI_GROUP_TODAY);
         if (selected === MENU_GOOGLE_CALENDAR) return runMacro(MACRO_GOOGLE_CALENDAR);
 
