@@ -1,0 +1,23 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),{execFileSync}=require('node:child_process');
+const file=require('node:path').join(__dirname,'..','Mery_TASKS今日やるをランダムに並べ替える.js');
+const source=fs.readFileSync(file,'utf8').replace(/^\uFEFF/,'').replace(/^#.*$/gm,'').replace(/^main\(\);$/m,'');
+let mockHex=null,calls=0,commands=[];
+const context=vm.createContext({ActiveXObject:function(name){assert.equal(name,'WScript.Shell');return {Exec(command){calls++;commands.push(command);assert.ok(command.startsWith('node -e "'));const hex=mockHex??execFileSync(process.execPath,['-e',command.slice(9,-1)],{encoding:'utf8'});return {StdOut:{ReadAll:()=>hex},StdErr:{ReadAll:()=>''}};}};}});
+vm.runInContext(source,context);
+const text='## 2026-10-05 (月) 今日の作業\n### 今日やる\n- [ ] A\n  details A\n\n- [x] B\n- [ ] C\n### 後で\n- [ ] unchanged\n';
+const changed=context.randomizeToday(text,'2026-10-05',()=>0);
+assert.notEqual(changed,text);assert.ok(changed.includes('- [ ] A\n  details A'));assert.ok(changed.endsWith('### 後で\n- [ ] unchanged\n'));assert.ok(changed.includes('- [x] B'));
+assert.throws(()=>context.randomizeToday(text.replace('C','A'),'2026-10-05',()=>0),/同名/);
+assert.throws(()=>context.randomizeToday(text.replace('- [ ] C','```\ncode\n```'),'2026-10-05',()=>0),/コードブロック/);
+const grouped=text.replace('- [ ] A','#### グループA\n- [ ] A').replace('- [x] B','#### グループB\n- [x] B');
+const mixed=context.randomizeToday(grouped,'2026-10-05',()=>0);
+assert.ok(mixed.indexOf('#### グループB')<mixed.indexOf('#### グループA'));assert.ok(mixed.includes('#### グループA\n- [ ] A\n  details A'));
+const memoTasks='## 2026-10-05\n### 今日やる\n- [ ] A\n  メモ：\n    \n  関連メモ: [A](notes/a.txt)\n\n- [ ] B\n  メモ：\n    B本文\n\n    B追記\n  関連メモ: [B](notes/b.txt)\n### 後で\n';
+const memoMixed=context.randomizeToday(memoTasks,'2026-10-05',()=>0);assert.ok(memoMixed.includes('- [ ] A\n  メモ：\n    \n  関連メモ: [A](notes/a.txt)'));assert.ok(memoMixed.includes('- [ ] B\n  メモ：\n    B本文\n\n    B追記\n  関連メモ: [B](notes/b.txt)'));
+mockHex='ffffffff00000002';const rejected=context.createSecureRandom();assert.equal(rejected.integer(3),2);
+mockHex=null;const secure=context.createSecureRandom();for(let i=0;i<5000;i++){const value=secure.integer(7);assert.ok(value>=0&&value<7&&Number.isInteger(value));}assert.ok(calls>=3);
+const before=calls,three=context.randomizeThreeTimes(text,'2026-10-05');assert.equal(calls-before,3);assert.notEqual(three,text);assert.ok(three.includes('- [ ] A\n  details A'));assert.ok(three.endsWith('### 後で\n- [ ] unchanged\n'));for(const command of commands.slice(-3)){assert.ok(command.includes('randomInt(100,601)'));assert.ok(command.indexOf('Atomics.wait')<command.indexOf('randomBytes'));}
+const menu=fs.readFileSync(require('node:path').join(__dirname,'..','Mery_作業メニュー.js'),'utf8').replace(/^\uFEFF/,'').replace(/^#.*$/gm,'');let executed;
+vm.runInNewContext(menu,{CreatePopupMenu:()=>({Add(){},Track:()=>15}),meMenuSeparator:0,editor:{ExecuteMacro:name=>{executed=name;}},alert:message=>{throw new Error(message);}});
+assert.equal(executed,'Mery_TASKS今日やるをランダムに並べ替える.js');
+console.log('PASS: task blocks, group headings, exclusions, duplicate guard, secure random refill, rejection sampling, menu dispatch');

@@ -1,5 +1,5 @@
 ﻿#title = "Mery 作業ハブを開く"
-#tooltip = "TASKS.md / LOG.md / COMMAND.md / OUTBOX.md を作成し、単一タブで表示します。"
+#tooltip = "作業用ファイルを準備し、TASKS.mdとLOG.mdを表示します。COMMAND.mdとOUTBOX.mdは必要時に開きます。"
 
 // Mery + Gemini タスク管理用 作業ハブ起動マクロ v0.3
 // 注意:
@@ -48,11 +48,10 @@ function main() {
             ensureFile(fullPath, FILES[i].initial);
         }
 
-        // よく使う順に表示。既存タブがあれば再利用します。
+        // 通常の作業では TASKS と LOG を表示。既存タブがあれば再利用します。
         showFileInSingleTab(HUB_DIR + "\\TASKS.md");
         showFileInSingleTab(HUB_DIR + "\\LOG.md");
-        showFileInSingleTab(HUB_DIR + "\\COMMAND.md");
-        showFileInSingleTab(HUB_DIR + "\\OUTBOX.md");
+        // OUTBOX は Gemini の結果表示時、COMMAND はファイルを開く操作で表示します。
 
         // 最後に TASKS.md を前面に戻す
         showFileInSingleTab(HUB_DIR + "\\TASKS.md");

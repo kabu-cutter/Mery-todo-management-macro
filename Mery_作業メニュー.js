@@ -1,4 +1,4 @@
-#title = "Mery作業メニュー"
+﻿#title = "Mery作業メニュー"
 
 // Mery タスク管理 v0.6.5
 // クリック用ランチャーマクロ。
@@ -18,6 +18,11 @@ var MENU_REFLECT_OUTBOX_END = 12;
 var MENU_GOOGLE_CALENDAR = 13;
 var MENU_GEMINI_GROUP_TODAY = 14;
 var MENU_RANDOM_TODAY = 15;
+var MENU_CREATE_MEMO = 16;
+var MENU_OPEN_MEMO = 17;
+var MENU_BACKUP = 18;
+var MENU_ADD_ASSET = 19;
+var MENU_OPEN_ASSET = 20;
 
 var MACRO_OPEN_HUB = "Mery_作業ハブを開く.js";
 var MACRO_START_TEMPLATE = "Mery_今日の開始テンプレートを挿入.js";
@@ -58,7 +63,13 @@ function main() {
         menu.Add("TASKS選択項目をLOGへ記録", MENU_TASKS_TO_LOG);
         menu.Add("OUTBOX選択範囲を末尾に反映", MENU_REFLECT_OUTBOX_END);
         menu.Add("", 0, meMenuSeparator);
+        menu.Add("このTODOにメモを作る", MENU_CREATE_MEMO);
+        menu.Add("関連メモを開く", MENU_OPEN_MEMO);
+        menu.Add("資料を追加", MENU_ADD_ASSET);
+        menu.Add("資料を開く", MENU_OPEN_ASSET);
+        menu.Add("", 0, meMenuSeparator);
         menu.Add("Google カレンダーと双方向同期", MENU_GOOGLE_CALENDAR);
+        menu.Add("作業ハブのバックアップ…", MENU_BACKUP);
 
         var selected = menu.Track(0);
         if (selected === 0) return;
@@ -76,6 +87,11 @@ function main() {
         if (selected === MENU_TASKS_TO_LOG) return runMacro(MACRO_TASKS_TO_LOG);
         if (selected === MENU_REFLECT_OUTBOX_END) return runMacro(MACRO_REFLECT_OUTBOX_END);
         if (selected === MENU_RANDOM_TODAY) return runMacro("Mery_TASKS今日やるをランダムに並べ替える.js");
+        if (selected === MENU_CREATE_MEMO) return runMacro("Mery_このTODOにメモを作る.js");
+        if (selected === MENU_OPEN_MEMO) return runMacro("Mery_関連メモを開く.js");
+        if (selected === MENU_BACKUP) return runMacro("Mery_バックアップ.js");
+        if (selected === MENU_ADD_ASSET) return runMacro("Mery_資料を追加.js");
+        if (selected === MENU_OPEN_ASSET) return runMacro("Mery_資料を開く.js");
         if (selected === MENU_GEMINI_GROUP_TODAY) return runMacro(MACRO_GEMINI_GROUP_TODAY);
         if (selected === MENU_GOOGLE_CALENDAR) return runMacro(MACRO_GOOGLE_CALENDAR);
 

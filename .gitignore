@@ -28,3 +28,11 @@ client_secret*.json
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
+
+# Local copies, notes, and backup runtime
+*.backup_*
+*.saved-*
+.backup/
+/img/
+/notes/
+/backup.json

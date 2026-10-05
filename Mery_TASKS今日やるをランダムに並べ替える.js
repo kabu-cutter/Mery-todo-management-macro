@@ -1,4 +1,4 @@
-#title = "今日やるをランダムに並べ替える"
+﻿#title = "今日やるをランダムに並べ替える"
 var HUB_DIR="C:\\Projects\\ai-work-hub";
 var TASKS_PATH=HUB_DIR+"\\TASKS.md";
 main();
@@ -54,7 +54,7 @@ function shuffleTaskRuns(lines,random){
     while(i<lines.length){
         if(/^[-*]\s+\[[ xX]\]\s+\S/.test(lines[i])){
             var block=[lines[i++]];
-            while(i<lines.length&&/^\s+\S/.test(lines[i]))block.push(lines[i++]);
+            while(i<lines.length&&(/^\s+\S/.test(lines[i])||/^\s*$/.test(lines[i])))block.push(lines[i++]);
             tokens.push({task:true});blocks.push(block);
         }else tokens.push({line:lines[i++]});
     }
