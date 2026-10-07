@@ -1,6 +1,6 @@
 ﻿#title = "Mery作業メニュー"
 
-// Mery タスク管理 v0.6.5
+// Mery タスク管理 v0.7.1
 // クリック用ランチャーマクロ。
 
 var MENU_OPEN_HUB = 1;
@@ -23,6 +23,8 @@ var MENU_OPEN_MEMO = 17;
 var MENU_BACKUP = 18;
 var MENU_ADD_ASSET = 19;
 var MENU_OPEN_ASSET = 20;
+var MENU_GOALS = 21;
+var MENU_BUTTON_GUIDE = 22;
 
 var MACRO_OPEN_HUB = "Mery_作業ハブを開く.js";
 var MACRO_START_TEMPLATE = "Mery_今日の開始テンプレートを挿入.js";
@@ -38,16 +40,19 @@ var MACRO_TASKS_TO_LOG = "Mery_TASKS選択項目をLOGへ記録.js";
 var MACRO_REFLECT_OUTBOX_END = "Mery_OUTBOX選択範囲を末尾に反映.js";
 var MACRO_GEMINI_GROUP_TODAY = "Mery_TASKS今日やるをGeminiでグループ分け.js";
 var MACRO_GOOGLE_CALENDAR = "Mery_Googleカレンダーと同期.js";
+var MACRO_GOALS = "Mery_目標管理.js";
 
 main();
 
 function main() {
     try {
         var menu = CreatePopupMenu();
+        var goalsMacroPresent = macroFileExistsBesideLauncher(MACRO_GOALS);
 
         menu.Add("作業ハブを開く", MENU_OPEN_HUB);
         menu.Add("", 0, meMenuSeparator);
         menu.Add("今日の開始テンプレートを挿入", MENU_START_TEMPLATE);
+        menu.Add(goalsMacroPresent ? "年・月・週の目標と期限を管理" : "年・月・週の目標と期限を管理（マクロ未配置）", MENU_GOALS, goalsMacroPresent ? 0 : meMenuGrayed);
         menu.Add("プロジェクトTODO.mdを読み込む", MENU_LOAD_PROJECT_TODO);
         menu.Add("TASKS.md 今日分の重複項目を整理", MENU_MERGE_TASKS_DUPLICATES);
         menu.Add("LOG.md の同日日付を統合", MENU_MERGE_LOG_DATES);
@@ -70,12 +75,20 @@ function main() {
         menu.Add("", 0, meMenuSeparator);
         menu.Add("Google カレンダーと双方向同期", MENU_GOOGLE_CALENDAR);
         menu.Add("作業ハブのバックアップ…", MENU_BACKUP);
+        menu.Add("作業メニューのボタン追加案内", MENU_BUTTON_GUIDE);
 
         var selected = menu.Track(0);
         if (selected === 0) return;
 
         if (selected === MENU_OPEN_HUB) return runMacro(MACRO_OPEN_HUB);
         if (selected === MENU_START_TEMPLATE) return runMacro(MACRO_START_TEMPLATE);
+        if (selected === MENU_GOALS) {
+            if (!goalsMacroPresent) {
+                alert("目標管理マクロが見つかりません。\n親マクロと同じフォルダーに配置してください。\n\n" + macroPathBesideLauncher(MACRO_GOALS));
+                return;
+            }
+            return runMacro(MACRO_GOALS);
+        }
         if (selected === MENU_LOAD_PROJECT_TODO) return runMacro(MACRO_LOAD_PROJECT_TODO);
         if (selected === MENU_MERGE_TASKS_DUPLICATES) return runMacro(MACRO_MERGE_TASKS_DUPLICATES);
         if (selected === MENU_MERGE_LOG_DATES) return runMacro(MACRO_MERGE_LOG_DATES);
@@ -94,10 +107,34 @@ function main() {
         if (selected === MENU_OPEN_ASSET) return runMacro("Mery_資料を開く.js");
         if (selected === MENU_GEMINI_GROUP_TODAY) return runMacro(MACRO_GEMINI_GROUP_TODAY);
         if (selected === MENU_GOOGLE_CALENDAR) return runMacro(MACRO_GOOGLE_CALENDAR);
+        if (selected === MENU_BUTTON_GUIDE) return showMacroButtonGuide();
 
     } catch (e) {
         alert("エラー: " + e.message);
     }
+}
+
+function macroPathBesideLauncher(fileName) {
+    var fso = new ActiveXObject("Scripting.FileSystemObject");
+    return fso.BuildPath(fso.GetParentFolderName(ScriptFullName), fileName);
+}
+
+function macroFileExistsBesideLauncher(fileName) {
+    var fso = new ActiveXObject("Scripting.FileSystemObject");
+    return fso.FileExists(macroPathBesideLauncher(fileName));
+}
+
+function showMacroButtonGuide() {
+    var macroPath = macroPathBesideLauncher("Mery_作業メニュー.js");
+    alert("作業メニューをボタンから開く設定\n\n" +
+        "1. Mery の [マクロ] → [カスタマイズ] を開く\n" +
+        "2. [新規作成] から、次のマクロを登録する\n" +
+        macroPath + "\n" +
+        "3. 登録したマクロを一覧で表示対象にする\n" +
+        "4. [表示] メニューからマクロバーを表示する\n" +
+        "5. マクロバーの作業メニューをクリックして起動する\n\n" +
+        "マクロファイル:\n" + macroPath + "\n\n" +
+        "※ Mery 起動時の自動実行は設定しません。ボタンを押したときに実行します。");
 }
 
 function runMacro(fileName) {

@@ -50,11 +50,8 @@ function main() {
         var mode = selected === 1 ? "--auth" : selected === 2 ? "--preview" : "--sync";
         var runner = new ActiveXObject("WScript.Shell");
         writeRunStatus(statusPath, JSON.stringify({phase:"queued",mode:mode,startedAt:new Date().toLocaleString(),startedMs:new Date().getTime()}));
-        var progressPath = HUB_DIR + "\\.mery-calendar\\progress.html";
-        writeRunStatus(progressPath, "<!doctype html><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"1\"><title>Mery 同期</title><p>同期処理を起動しています…</p>");
         runner.Run(quoteArg(NODE_EXE) + " " + quoteArg(helper) + " --hub " + quoteArg(HUB_DIR) + " " + mode + " --tasks", 0, false);
-        runner.Run(quoteArg(progressPath), 1, false);
-        showStatusMessage("進捗画面を開きました。\n完了後、このマクロの「処理状況・結果を確認」を選んでください。\n同期中の TASKS.md / LOG.md / TODO.md の編集は、完了後に行ってください。");
+        showStatusMessage("処理を開始しました。\n完了後、このマクロの「処理状況・結果を確認」を選んでください。\n同期中の TASKS.md / LOG.md / TODO.md の編集は、完了後に行ってください。");
     } catch (e) {
         alert("Google カレンダー同期エラー: " + e.message);
     }

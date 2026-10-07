@@ -13,7 +13,6 @@ function notifyCompletion(mode,ok,launch=spawn,platform=process.platform) {
     child.on('error',()=>{});child.unref();
   } catch {}
 }
-const progressPage=require('./progress.cjs');
 const tasks=require('./tasks-sync.cjs');
 const core=require('./calendar-sync-core.cjs');
 const google=require('./calendar-google.cjs');
@@ -32,7 +31,7 @@ function readConfiguration(hub) {
   if(typeof calendarId!=='string'||!calendarId.trim()) throw new Error('calendarId が不正です。');
   return {todoPaths:user.todoPaths,taskListId:user.taskListId,calendarId,credentialsPath:path.resolve(hub,user.credentialsPath||'.mery-calendar/oauth-client.json'),tokenPath:path.join(dir,'token.dpapi'),statePath:path.join(dir,'sync.sqlite'),reportPath:path.join(hub,'CALENDAR_SYNC_REPORT.md'),lockPath:path.join(dir,'sync.lock'),hub,dir};
 }
-async function synchronize(documents,state,events,api,calendarId,apply=false,onProgress=()=>{}) {
+async function synchronize(documents,state,events,api,calendarId,apply=false) {
   if(state.calendarId && state.calendarId!==calendarId) throw new Error('同期先のカレンダーが変更されています。別の作業ハブを使うか、既存の同期関係を確認してください。');
   const parsed={TASKS:core.parseDocument(documents.TASKS,'TASKS'),LOG:core.parseDocument(documents.LOG,'LOG')};
   const local=[...parsed.TASKS.items,...parsed.LOG.items];
@@ -45,9 +44,7 @@ async function synchronize(documents,state,events,api,calendarId,apply=false,onP
   const nextState={version:1,calendarId,entries:{...entries}};
   const pulls=[],removals=[],errors=[];
   if(apply) {
-    let processed=0;
     for(const operation of operations) {
-      onProgress({stage:"LOG を同期しています",done:processed++,total:operations.length,item:operation.local?.text||operation.remote?.text||""});
       const {id,action,local:l,remote:r,base}=operation;
       const eventId=r?.eventId||base?.eventId||'a'+id;
       const resource='calendars/'+encodeURIComponent(calendarId)+'/events/'+encodeURIComponent(eventId);
@@ -106,15 +103,12 @@ async function cli(args=process.argv.slice(2)) {
   try {lock=fs.openSync(config.lockPath,'wx');} catch {throw new Error('別の同期処理が実行中です。異常終了した場合は .mery-calendar/sync.lock を確認してください。');}
   const mode=args.includes('--auth')?'--auth':args.includes('--sync')?'--sync':'--preview';
   const statusPath=path.join(config.dir,'run-status.json');let runError;
-  let live={phase:'running',mode,pid:process.pid,startedAt:new Date().toISOString()};
-  const writeStatus=value=>{live={...live,...value};const tmp=statusPath+'.tmp';fs.writeFileSync(tmp,JSON.stringify(live));fs.renameSync(tmp,statusPath);fs.writeFileSync(path.join(config.dir,'progress.html'),progressPage.render(live));};
-  const onProgress=value=>writeStatus({...value,phase:'running'});
+  const writeStatus=value=>{const tmp=statusPath+'.tmp';fs.writeFileSync(tmp,JSON.stringify(value));fs.renameSync(tmp,statusPath);};
   try {
     writeStatus({phase:'running',mode,pid:process.pid,startedAt:new Date().toISOString()});
     const offline=args.includes('--offline-preview');
     const auth=args.includes('--auth');
     const apply=args.includes('--sync');
-    onProgress({stage:auth?'ブラウザーでのログインを待っています':'Google に接続しています'});
     const api=offline?null:await google.connect(config,auth);
     if(auth) {
       const calendars=await google.listCalendars(api);
@@ -130,7 +124,7 @@ async function cli(args=process.argv.slice(2)) {
     const useTasks=args.includes('--tasks');
     if(!useTasks&&fs.existsSync(path.join(config.dir,'tasks-ids.json')))throw new Error('ID別ファイル方式では --tasks を指定するか、更新済みの Mery 同期マクロを使用してください。');
     if(useTasks&&offline)throw new Error('My Tasks は接続ありのプレビューを使用してください。');
-    const taskReport=useTasks?await tasks.run(config,api,apply,onProgress):'';
+    const taskReport=useTasks?await tasks.run(config,api,apply):'';
     const originals={},documents={};
     for(const kind of ['TASKS','LOG']) {
       const file=path.join(hub,kind+'.md');
@@ -149,13 +143,12 @@ async function cli(args=process.argv.slice(2)) {
         originals[kind]=fs.readFileSync(path.join(hub,kind+'.md'));documents[kind]=decodeFile(originals[kind]);
       }
     }
-    onProgress({stage:"カレンダーの予定を読み込んでいます",done:null,total:null,item:""});
     const events=offline?[]:await google.listAll(api,config.calendarId);
     if(offline && Object.keys(state.entries).length) throw new Error('既に同期済みです。削除誤判定を防ぐため、接続ありのプレビューを使用してください。');
     const legacy=Object.fromEntries(Object.entries(state.entries).filter(([,x])=>x.local.kind==='TASKS'));
     const logState=useTasks?{...state,entries:Object.fromEntries(Object.entries(state.entries).filter(([,x])=>x.local.kind==='LOG'))}:state;
     const logEvents=useTasks?events.filter(x=>x.extendedProperties?.private?.meryKind==='LOG'||/^\[LOG\] /.test(x.summary||'')||Object.values(logState.entries).some(y=>y.eventId===x.id)):events;
-    const result=await synchronize(useTasks?{...documents,TASKS:''}:documents,logState,logEvents,api,config.calendarId,apply,onProgress);
+    const result=await synchronize(useTasks?{...documents,TASKS:''}:documents,logState,logEvents,api,config.calendarId,apply);
     if(useTasks){result.documents.TASKS=documents.TASKS;result.state.entries={...legacy,...result.state.entries};}
     if(apply) {
       // Check both originals before saving either file. Preserve snapshots before every rewrite.
@@ -173,7 +166,7 @@ async function cli(args=process.argv.slice(2)) {
   } finally {
     try {if(store) store.close();} finally {
       fs.closeSync(lock);fs.unlinkSync(config.lockPath);
-      writeStatus({phase:'completed',mode,stage:'処理終了',item:'',done:null,total:null,ok:!runError&&!process.exitCode,error:runError||null,finishedAt:new Date().toISOString()});
+      writeStatus({phase:'completed',mode,ok:!runError&&!process.exitCode,error:runError||null,finishedAt:new Date().toISOString()});
       if(args.includes('--tasks'))notifyCompletion(mode,!runError&&!process.exitCode);
     }
   }

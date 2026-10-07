@@ -18,6 +18,6 @@ mockHex='ffffffff00000002';const rejected=context.createSecureRandom();assert.eq
 mockHex=null;const secure=context.createSecureRandom();for(let i=0;i<5000;i++){const value=secure.integer(7);assert.ok(value>=0&&value<7&&Number.isInteger(value));}assert.ok(calls>=3);
 const before=calls,three=context.randomizeThreeTimes(text,'2026-10-05');assert.equal(calls-before,3);assert.notEqual(three,text);assert.ok(three.includes('- [ ] A\n  details A'));assert.ok(three.endsWith('### 後で\n- [ ] unchanged\n'));for(const command of commands.slice(-3)){assert.ok(command.includes('randomInt(100,601)'));assert.ok(command.indexOf('Atomics.wait')<command.indexOf('randomBytes'));}
 const menu=fs.readFileSync(require('node:path').join(__dirname,'..','Mery_作業メニュー.js'),'utf8').replace(/^\uFEFF/,'').replace(/^#.*$/gm,'');let executed;
-vm.runInNewContext(menu,{CreatePopupMenu:()=>({Add(){},Track:()=>15}),meMenuSeparator:0,editor:{ExecuteMacro:name=>{executed=name;}},alert:message=>{throw new Error(message);}});
+vm.runInNewContext(menu,{ScriptFullName:'C:\\Mery\\Macros\\Mery_作業メニュー.js',ActiveXObject:function(){return{GetParentFolderName:p=>p.substring(0,p.lastIndexOf('\\')),BuildPath:(d,f)=>d+'\\'+f,FileExists:()=>true}},CreatePopupMenu:()=>({Add(){},Track:()=>15}),meMenuSeparator:0,editor:{ExecuteMacro:name=>{executed=name;}},alert:message=>{throw new Error(message);}});
 assert.equal(executed,'Mery_TASKS今日やるをランダムに並べ替える.js');
 console.log('PASS: task blocks, group headings, exclusions, duplicate guard, secure random refill, rejection sampling, menu dispatch');
