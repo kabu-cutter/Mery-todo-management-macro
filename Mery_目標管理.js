@@ -14,6 +14,7 @@ function main() {
         menu.Add("選択した目標の下に追加", 3);
         menu.Add("このTODOに期限日・任意時刻を設定", 4);
         menu.Add("このTODOの期限日・時刻を解除", 5);
+        menu.Add("MeryTODO CalDAV同期（プレビュー・反映）", 7);
         var choice = menu.Track(0);
         if (!choice) return;
         if (choice === 6) return createGoalChain();
@@ -22,6 +23,7 @@ function main() {
         if (choice === 3) return addChildGoal();
         if (choice === 4) return setCurrentTaskSchedule(false);
         if (choice === 5) return setCurrentTaskSchedule(true);
+        if (choice === 7) return syncGoalsCalDav();
     } catch (e) {
         alert("目標管理: " + e.message);
     }
@@ -137,6 +139,19 @@ function openGoalsDocument() {
         doc.Activate();
     } catch (e) {
         alert("目標ファイルを開けませんでした。\n" + e.message);
+    }
+}
+
+function syncGoalsCalDav() {
+    try {
+        var doc = openGoals();
+        if (!doc.Saved) throw new Error("GOALS.md に未保存の変更があります。保存してから同期してください。");
+        var fso = new ActiveXObject("Scripting.FileSystemObject");
+        var macro = fso.BuildPath(fso.GetParentFolderName(ScriptFullName), "Mery_Thunderbirdと同期.js");
+        if (!fso.FileExists(macro)) throw new Error("Thunderbird同期マクロが見つかりません: " + macro);
+        editor.ExecuteMacro(macro);
+    } catch (e) {
+        alert("MeryTODO CalDAV同期を開始できませんでした。\n" + e.message);
     }
 }
 

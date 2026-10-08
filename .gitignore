@@ -1,6 +1,7 @@
 # Runtime working files
 ai-work-hub/
 TASKS.md
+GOALS.md
 LOG.md
 COMMAND.md
 OUTBOX.md
@@ -21,6 +22,7 @@ Thumbs.db
 # Google Calendar runtime data and credentials
 .mery-calendar/
 CALENDAR_SYNC_REPORT.md
+MERYTODO_CALDAV_REPORT.md
 oauth-client.json
 client_secret*.json
 *.dpapi

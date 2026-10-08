@@ -6,9 +6,17 @@ Mery Gemini Task Macro は、Windows 向けテキストエディタ **Mery** 上
 
 現在まだ開発中です。作者の環境で動作確認している段階のため、安定版ではありません。
 
+## データはローカルで管理
+
+日々の作業と目標の正本は、手元の作業ハブにある `TASKS.md` / `LOG.md` / `GOALS.md` などのMarkdownファイルです。同期を使わなくてもMeryで直接編集できます。同期状態やID対応は同じ作業ハブの `.mery-calendar` に置き、バックアップではMarkdownとこのフォルダーを一緒に保存してください。GitHubへ公開する場合は、個人の作業データ、認証情報、同期DBをリポジトリに含めないでください（このリポジトリの `.gitignore` も参照）。
+
+カレンダーで見たい場合は、まず **Thunderbirdとのローカル双方向同期** を選べます。CalDAVは自分のPC内だけで動き、Thunderbird側はオフラインサポートを利用できます。導入から設定までの手順は [Thunderbirdの導入とMeryTODOカレンダー設定](README_Thunderbird.md) にまとめました。Google Tasks / Google Calendar やGeminiなどの外部クラウド連携は任意で、使う場合だけ各サービスの接続設定を行います。
+
 ## 2026-10-08 の更新：目標管理とメニュー導線
 
 作業メニューの「年・月・週の目標と期限を管理」から `GOALS.md` を開き、年目標の下に複数の月目標、週目標、行動TODOを階層化できます。ウィザードで入力を検証し、誤りがあれば同じ入力へ戻ります。生成後も通常のMarkdownとして直接編集できます。TODOには期限日だけを設定でき、必要な場合だけ時刻を追加します。目標は `TASKS.md` / `LOG.md` と独立して管理します。詳しくは [目標管理](README_目標管理.md) を参照してください。
+
+作業メニューの先頭側にある「Thunderbird カレンダーと双方向同期」から、PC内だけで動くCalDAVを通じて `GOALS.md` / `TASKS.md` を同期できます。年・月・週目標は期間予定、GOALS.mdの行動TODOとTASKS.mdの今日以降の項目はThunderbirdのToDoに同期します。安定ID、変更前バックアップ、競合レポートで誤上書きを防ぎます。設定は [Thunderbirdの導入とMeryTODOカレンダー設定](README_Thunderbird.md) と [目標管理](README_目標管理.md) を参照してください。
 
 ### TODOメニューを「マクロ」内に置く理由
 

@@ -26,6 +26,7 @@ var MENU_OPEN_ASSET = 20;
 var MENU_GOALS = 21;
 var MENU_BUTTON_GUIDE = 22;
 var MENU_FORMAT_MEMO_INDENT = 23;
+var MENU_THUNDERBIRD_CALENDAR = 24;
 
 var MACRO_OPEN_HUB = "Mery_作業ハブを開く.js";
 var MACRO_START_TEMPLATE = "Mery_今日の開始テンプレートを挿入.js";
@@ -41,6 +42,7 @@ var MACRO_TASKS_TO_LOG = "Mery_TASKS選択項目をLOGへ記録.js";
 var MACRO_REFLECT_OUTBOX_END = "Mery_OUTBOX選択範囲を末尾に反映.js";
 var MACRO_GEMINI_GROUP_TODAY = "Mery_TASKS今日やるをGeminiでグループ分け.js";
 var MACRO_GOOGLE_CALENDAR = "Mery_Googleカレンダーと同期.js";
+var MACRO_THUNDERBIRD_CALENDAR = "Mery_Thunderbirdと同期.js";
 var MACRO_GOALS = "Mery_目標管理.js";
 var MACRO_FORMAT_MEMO_INDENT = "Mery_TASKSメモ欄のインデントを整える.js";
 
@@ -76,6 +78,7 @@ function main() {
         menu.Add("資料を追加", MENU_ADD_ASSET);
         menu.Add("資料を開く", MENU_OPEN_ASSET);
         menu.Add("", 0, meMenuSeparator);
+        menu.Add("Thunderbird カレンダーと双方向同期", MENU_THUNDERBIRD_CALENDAR);
         menu.Add("Google カレンダーと双方向同期", MENU_GOOGLE_CALENDAR);
         menu.Add("作業ハブのバックアップ…", MENU_BACKUP);
         menu.Add("作業メニューのボタン追加案内", MENU_BUTTON_GUIDE);
@@ -110,6 +113,7 @@ function main() {
         if (selected === MENU_ADD_ASSET) return runMacro("Mery_資料を追加.js");
         if (selected === MENU_OPEN_ASSET) return runMacro("Mery_資料を開く.js");
         if (selected === MENU_GEMINI_GROUP_TODAY) return runMacro(MACRO_GEMINI_GROUP_TODAY);
+        if (selected === MENU_THUNDERBIRD_CALENDAR) return runMacro(MACRO_THUNDERBIRD_CALENDAR);
         if (selected === MENU_GOOGLE_CALENDAR) return runMacro(MACRO_GOOGLE_CALENDAR);
         if (selected === MENU_BUTTON_GUIDE) return showMacroButtonGuide();
 

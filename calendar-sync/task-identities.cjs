@@ -3,12 +3,12 @@ const fs=require('node:fs'),crypto=require('node:crypto');
 const core=require('./calendar-sync-core.cjs');
 const strip=text=>text.replace(/\s*<!-- mery-calendar:[a-f0-9]{32} -->/g,'').replace(/\r\n?/g,'\n');
 function load(file){if(!fs.existsSync(file))return [];const data=JSON.parse(fs.readFileSync(file,'utf8'));if(data.version!==1||!Array.isArray(data.snapshots)||data.snapshots.some(x=>typeof x!=='string'))throw Error('TASKS のIDファイルが不正です。バックアップから復元してください。');return data.snapshots;}
-function restore(text,snapshots){
-  const parsed=core.parseDocument(text,'TASKS');if(!snapshots.length)return parsed.text;
+function restore(text,snapshots,makeId=core.uuid){
+  const parsed=core.parseDocument(text,'TASKS',makeId);if(!snapshots.length)return parsed.text;
   const explicit=new Set(text.match(/<!-- mery-calendar:([a-f0-9]{32}) -->/g)?.map(x=>x.match(/[a-f0-9]{32}/)[0])||[]);
   const context=x=>x.date+'\0'+x.section,key=x=>context(x)+'\0'+x.text;
   const newKeys=new Set(parsed.items.map(key));
-  const candidates=snapshots.map(s=>({text:s,items:core.parseDocument(s,'TASKS').items}));
+  const candidates=snapshots.map(s=>({text:s,items:core.parseDocument(s,'TASKS',makeId).items}));
   const chosen=candidates.find(x=>strip(x.text)===strip(text))||candidates.sort((a,b)=>b.items.filter(x=>newKeys.has(key(x))).length-a.items.filter(x=>newKeys.has(key(x))).length)[0];
   let old=chosen.items.filter(x=>!explicit.has(x.id)),fresh=parsed.items.filter(x=>!explicit.has(x.id));const ids=new Map();
   function match(group,duplicates){
