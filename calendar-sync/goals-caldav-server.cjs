@@ -12,7 +12,12 @@ const HOST='127.0.0.1', PORT=18453;
 const PREFIX='/calendars/default/MeryTODO/';
 function xml(value){return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');}
 function prop(name,value,namespace='d'){return '<'+namespace+':'+name+'>'+value+'</'+namespace+':'+name+'>';}
-function hrefFor(href){return PREFIX+encodeURIComponent(href.split('/').pop());}
+function canonicalPath(pathname){
+  if(!pathname.startsWith(PREFIX)||pathname===PREFIX)return pathname;
+  const name=pathname.slice(PREFIX.length);
+  if(!name||name.includes('/'))return pathname;
+  return PREFIX+encodeURIComponent(decodeURIComponent(name));
+}
 function itemResponse(href,item,etag,includeData=false){
   let calendarData=String(item).replace(/^\uFEFF/,'').trim();
   if(!/^BEGIN:VCALENDAR(?:\r?\n)/.test(calendarData))calendarData=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//MeryTODO//CalDAV//JA','CALSCALE:GREGORIAN',calendarData,'END:VCALENDAR'].join('\r\n')+'\r\n';
@@ -44,7 +49,7 @@ function collectionProperties(href,display,token,root=false){
   return p;
 }
 function requestedHrefs(body){return [...body.matchAll(/<(?:[\w-]+:)?href\b[^>]*>([\s\S]*?)<\/(?:[\w-]+:)?href>/gi)].map(x=>x[1].replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'"));}
-function makeHref(location){return location.startsWith('/')?location:new URL(location,'http://'+HOST+':'+PORT).pathname;}
+function makeHref(location){return canonicalPath(location.startsWith('/')?location:new URL(location,'http://'+HOST+':'+PORT).pathname);}
 function collectionResponse(pathname,store,display,root=false){
   return '<d:response><d:href>'+xml(pathname)+'</d:href><d:propstat><d:prop>'+collectionProperties(pathname,display,store.token(),root)+'</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>';
 }
@@ -59,7 +64,7 @@ function createServer(hub){
   const store=loadStore(hub);
   const server=http.createServer(async(req,res)=>{
     try {
-      const url=new URL(req.url,'http://'+HOST+':'+PORT), pathname=decodeURIComponent(url.pathname);
+      const url=new URL(req.url,'http://'+HOST+':'+PORT), pathname=canonicalPath(url.pathname);
       if(pathname==='/healthz')return writeResponse(res,200,{'Content-Type':'application/json'},JSON.stringify({ok:true,host:HOST,port:PORT,token:store.token()}));
       if(pathname==='/.well-known/caldav') {res.writeHead(301,{Location:PREFIX});return res.end();}
       if(req.method==='OPTIONS')return writeResponse(res,200,{DAV:'1, 2, 3, calendar-access, sync-collection','Allow':'OPTIONS, GET, HEAD, PROPFIND, REPORT, PUT, DELETE, MKCALENDAR','MS-Author-Via':'DAV'});
@@ -146,4 +151,4 @@ function createServer(hub){
 const hubArg=process.argv.indexOf('--hub');
 const hub=hubArg>=0?process.argv[hubArg+1]:'C:\\Projects\\ai-work-hub';
 if(require.main===module)createServer(path.resolve(hub));
-module.exports={createServer,HOST,PORT,PREFIX,xml,requestedHrefs,parseToken};
+module.exports={createServer,HOST,PORT,PREFIX,canonicalPath,makeHref,xml,requestedHrefs,parseToken};

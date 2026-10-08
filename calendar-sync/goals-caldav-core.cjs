@@ -87,7 +87,7 @@ function parseGoals(input, options = {}) {
   }
   const lines = String(input).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
   const idMap = goalIdMap(lines.join('\n'));
-  const items = [], seen = new Set(); let assignedIds = 0;
+  const items = [], seen = new Set(), parsedIndexes = new Set(); let assignedIds = 0;
   let active = false, sectionYear = '', annual = null, month = null, week = null, fence = '';
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
@@ -98,7 +98,7 @@ function parseGoals(input, options = {}) {
     if (heading) { active = true; sectionYear = heading[1]; annual = null; month = null; week = null; continue; }
     if (/^##\s/.test(line)) { active = false; annual = null; month = null; week = null; continue; }
     if (!active) continue;
-    const match = /^([ \t\u3000]*[-*]\s*\[([ xX])\]\s*)(.*)$/.exec(line);
+    const match = /^([ \t\u3000]*[-*]\s*\[([ xX\u3000])\]\s*)(.*)$/.exec(line);
     if (!match) continue;
     const prefix = match[1], checked = match[2].toLowerCase() === 'x';
     let body = match[3];
@@ -146,9 +146,14 @@ function parseGoals(input, options = {}) {
     if (id) seen.add(id);
     const item = {id, type, title: cleanTitle(body, type), done: checked, period, parentId, start: range?.start || '', end: range?.end || '', due, time, index, prefix, body, comments, rawLine: lines[index]};
     items.push(item);
+    parsedIndexes.add(index);
     if (type === 'year') annual.id = id;
     if (type === 'month') month.id = id;
     if (type === 'week') week.id = id;
+  }
+  for(let index=0;index<lines.length;index++){
+    if(!parsedIndexes.has(index)&&/^\s*[-*].*<!--\s*(?:mery-goal-id|g):/i.test(lines[index]))
+      throw new Error('同期ID付きの目標行を解析できません ('+(index+1)+'行目)。チェック欄や書式を確認してください。');
   }
   if (items.some(item => !item.id)) throw new Error('同期用IDがありません。同期を適用してIDを割り当ててください。');
   return {items, text: lines.join('\n'), assignedIds};

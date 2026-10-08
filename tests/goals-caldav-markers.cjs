@@ -86,3 +86,20 @@ test('Thunderbird action TODO edits keep its short reference',()=>{
   assert.match(result.goals,/Updated action <!--g:4-->/);
   assert.equal(core.parseGoals(result.goals,{assignIds:false}).items[3].id,todo.id);
 });
+
+test('Japanese IME full-width checkbox space is an unfinished tracked TODO',()=>{
+  const compact=core.parseGoals(source,{assignIds:false,compactPeriodIds:true}).text;
+  const edited=compact.replace('      - [ ] Action <!--g:4-->','      - [　] Action <!--g:4-->');
+  const parsed=core.parseGoals(edited,{assignIds:false});
+  assert.equal(parsed.items.length,4);
+  assert.equal(parsed.items[3].done,false);
+  const updated=sync.applyRemote(parsed.items,parsed.text,[],'',[
+    {id:ids[3],action:'pull',local:parsed.items[3],remote:{...parsed.items[3],done:true,title:'Changed'}}
+  ]);
+  assert.match(updated.goals,/\[x\] Changed <!--g:4-->/);
+});
+
+test('tracked GOALS rows with an unknown checkbox stop before deletion',()=>{
+  const compact=core.parseGoals(source,{assignIds:false,compactPeriodIds:true}).text;
+  assert.throws(()=>core.parseGoals(compact.replace('[ ] Action','[?] Action'),{assignIds:true}),/同期ID付きの目標行を解析できません/);
+});
