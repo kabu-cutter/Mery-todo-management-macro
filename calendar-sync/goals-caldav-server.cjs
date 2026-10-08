@@ -18,9 +18,13 @@ function canonicalPath(pathname){
   if(!name||name.includes('/'))return pathname;
   return PREFIX+encodeURIComponent(decodeURIComponent(name));
 }
-function itemResponse(href,item,etag,includeData=false){
+function calendarDocument(item){
   let calendarData=String(item).replace(/^\uFEFF/,'').trim();
-  if(!/^BEGIN:VCALENDAR(?:\r?\n)/.test(calendarData))calendarData=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//MeryTODO//CalDAV//JA','CALSCALE:GREGORIAN',calendarData,'END:VCALENDAR'].join('\r\n')+'\r\n';
+  if(!/^BEGIN:VCALENDAR(?:\r?\n)/.test(calendarData))calendarData=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//MeryTODO//CalDAV//JA','CALSCALE:GREGORIAN',calendarData,'END:VCALENDAR'].join('\r\n');
+  return calendarData+'\r\n';
+}
+function itemResponse(href,item,etag,includeData=false){
+  const calendarData=calendarDocument(item);
   const data=includeData?prop('calendar-data',xml(calendarData),'c'):'';
   return '<d:response><d:href>'+xml(href)+'</d:href><d:propstat><d:prop>'+prop('getetag',xml(etag))+data+'</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>';
 }
@@ -74,7 +78,7 @@ function createServer(hub){
         if(!resource)return writeResponse(res,404);
         const headers={'Content-Type':'text/calendar; charset=utf-8','ETag':resource.etag,'Last-Modified':new Date(resource.updated_at).toUTCString()};
         if(req.headers['if-none-match']===resource.etag)return writeResponse(res,304,headers);
-        return writeResponse(res,200,headers,req.method==='HEAD'?'':resource.ical);
+        return writeResponse(res,200,headers,req.method==='HEAD'?'':calendarDocument(resource.ical));
       }
       if(req.method==='PROPFIND') {
         const body=await readBody(req), depth=req.headers.depth||'0';
@@ -151,4 +155,4 @@ function createServer(hub){
 const hubArg=process.argv.indexOf('--hub');
 const hub=hubArg>=0?process.argv[hubArg+1]:'C:\\Projects\\ai-work-hub';
 if(require.main===module)createServer(path.resolve(hub));
-module.exports={createServer,HOST,PORT,PREFIX,canonicalPath,makeHref,xml,requestedHrefs,parseToken};
+module.exports={createServer,HOST,PORT,PREFIX,canonicalPath,calendarDocument,makeHref,xml,requestedHrefs,parseToken};

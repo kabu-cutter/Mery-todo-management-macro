@@ -11,3 +11,12 @@ test('CalDAV resource requests resolve to the encoded href stored by sync',()=>{
   assert.equal(server.makeHref('http://127.0.0.1:18453'+href),href);
   assert.equal(server.makeHref(server.PREFIX+name),href);
 });
+
+test('individual CalDAV resources include a VCALENDAR wrapper for Thunderbird',()=>{
+  const component='BEGIN:VTODO\r\nUID:task@local.merytodo\r\nSUMMARY:Task\r\nEND:VTODO\r\n';
+  const document=server.calendarDocument(component);
+  assert.match(document,/^BEGIN:VCALENDAR\r\nVERSION:2\.0\r\n/);
+  assert.match(document,/BEGIN:VTODO\r\nUID:task@local\.merytodo/);
+  assert.match(document,/END:VTODO\r\nEND:VCALENDAR\r\n$/);
+  assert.equal(server.calendarDocument(document),document);
+});
