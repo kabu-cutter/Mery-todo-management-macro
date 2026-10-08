@@ -5,8 +5,8 @@ const source=fs.readFileSync(file,'utf8').replace(/^\uFEFF/,'').replace(/^#.*$/g
 const context=vm.createContext({ScriptFullName:'C:\\Mery\\Macros\\Mery_作業メニュー.js'});
 let present=true;
 let alertMessage='';
-context.alert=message=>{alertMessage=message;};
-context.ActiveXObject=function(){return {
+context.editor={};
+context.ActiveXObject=function(name){if(name==='WScript.Shell')return {Popup:message=>{alertMessage=message;}};return {
  GetParentFolderName:fullPath=>fullPath.substring(0,fullPath.lastIndexOf('\\')),
  BuildPath:(folder,fileName)=>folder+'\\'+fileName,
  FileExists:filePath=>present&&filePath==='C:\\Mery\\Macros\\Mery_目標管理.js'
@@ -32,10 +32,11 @@ test('button guide explains how to launch the parent macro from the macro bar',(
 
 test('memo indentation formatter is available from the work menu',()=>{
  const items=[],calls=[];
+ context.macroFileExistsBesideLauncher=()=>true;
  context.CreatePopupMenu=()=>({Add:(...args)=>items.push(args),Track:()=>23});
  context.meMenuSeparator=0;context.meMenuGrayed=1;
  context.editor={ExecuteMacro:name=>calls.push(name)};
  context.main();
  assert.ok(items.some(item=>item[0]==='TASKS.mdのメモ欄のインデントを整える'));
- assert.deepEqual(calls,['Mery_TASKSメモ欄のインデントを整える.js']);
+ assert.deepEqual(calls,['C:\\Mery\\Macros\\Mery_TASKSメモ欄のインデントを整える.js']);
 });

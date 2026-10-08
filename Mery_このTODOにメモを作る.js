@@ -35,7 +35,7 @@ function main() {
         updated=memoMarkSaved(updated,memoContext(updated,selected.top,selected.bottom),doc.FullName,fso);
         memoSaveTodo(doc,original,updated,stamp,fso);
         memoOpen(created,fso);
-    } catch(e) { alert("メモを作成: " + e.message + (created ? "\n\n作成先を確認してください: " + created : "")); }
+    } catch(e) { macroMessage("メモを作成: " + e.message + (created ? "\n\n作成先を確認してください: " + created : "")); }
 }
 
 var HUB_DIR = "C:\\Projects\\ai-work-hub";
@@ -256,16 +256,11 @@ function memoWriteNew(path, text) {
 }
 function memoOpen(path, fso) {
     var target=fso.GetAbsolutePathName(path).toLowerCase();
-    for(var i=0;i<editor.Documents.Count;i++) { var doc=editor.Documents.Item(i); if(doc.FullName && fso.GetAbsolutePathName(doc.FullName).toLowerCase()===target) { doc.Activate(); memoVertical(); return doc; } }
-    var text=memoReadText(path); editor.NewFile(); var opened=editor.ActiveDocument;
-    opened.Text=text; opened.Save(path); memoVertical(); opened.selection.StartOfDocument(false); return opened;
-}
-function memoVertical() {
-    // 縦書きはトグル式なので、現在のチェック状態を確認してから切り替える。
-    var status=editor.QueryStatusByID(2238);
-    if((status & 2)!==0) return;
-    if((status & 1)===0) throw new Error("TXTは開きました。［表示］→［縦書き］で切り替えてください。");
-    editor.ExecuteCommandByID(2238);
+    for(var i=0;i<editor.Documents.Count;i++) { var doc=editor.Documents.Item(i); if(doc.FullName && fso.GetAbsolutePathName(doc.FullName).toLowerCase()===target) { doc.Activate(); return doc; } }
+    editor.OpenFile(path, 0, meOpenAllowNewWindow);
+    var opened=editor.ActiveDocument;
+    if(!opened || !opened.FullName || fso.GetAbsolutePathName(opened.FullName).toLowerCase()!==target) throw new Error("関連メモをMeryで開けませんでした。");
+    return opened;
 }
 function memoSelection(doc) {
     var sel=doc.selection;
@@ -279,3 +274,7 @@ function memoCheckSync(fso) {
 }
 
 main();
+
+function macroMessage(message) {
+    new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 0x30);
+}

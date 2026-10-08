@@ -87,7 +87,7 @@ function main() {
         if (selected === MENU_START_TEMPLATE) return runMacro(MACRO_START_TEMPLATE);
         if (selected === MENU_GOALS) {
             if (!goalsMacroPresent) {
-                alert("目標管理マクロが見つかりません。\n親マクロと同じフォルダーに配置してください。\n\n" + macroPathBesideLauncher(MACRO_GOALS));
+                macroMessage("目標管理マクロが見つかりません。\n親マクロと同じフォルダーに配置してください。\n\n" + macroPathBesideLauncher(MACRO_GOALS));
                 return;
             }
             return runMacro(MACRO_GOALS);
@@ -114,7 +114,7 @@ function main() {
         if (selected === MENU_BUTTON_GUIDE) return showMacroButtonGuide();
 
     } catch (e) {
-        alert("エラー: " + e.message);
+        macroMessage("エラー: " + e.message);
     }
 }
 
@@ -130,7 +130,7 @@ function macroFileExistsBesideLauncher(fileName) {
 
 function showMacroButtonGuide() {
     var macroPath = macroPathBesideLauncher("Mery_作業メニュー.js");
-    alert("作業メニューをボタンから開く設定\n\n" +
+    macroMessage("作業メニューをボタンから開く設定\n\n" +
         "1. Mery の [マクロ] → [カスタマイズ] を開く\n" +
         "2. [新規作成] から、次のマクロを登録する\n" +
         macroPath + "\n" +
@@ -143,8 +143,16 @@ function showMacroButtonGuide() {
 
 function runMacro(fileName) {
     try {
-        editor.ExecuteMacro(fileName);
+        var macroPath = macroPathBesideLauncher(fileName);
+        if (!macroFileExistsBesideLauncher(fileName)) {
+            throw new Error("親マクロと同じフォルダーに対象マクロがありません: " + macroPath);
+        }
+        editor.ExecuteMacro(macroPath);
     } catch (e) {
-        alert("マクロを実行できませんでした。\n\n対象: " + fileName + "\n\n詳細: " + e.message);
+        macroMessage("マクロを実行できませんでした。\n\n対象: " + fileName + "\n\n詳細: " + e.message);
     }
+}
+
+function macroMessage(message) {
+    new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 0x30);
 }

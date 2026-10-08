@@ -2,10 +2,13 @@
 
 function main() {
     try {
-        var doc=editor.ActiveDocument;
+        var doc=getMeryEditor().ActiveDocument;
         if(!doc.FullName) throw new Error("TODOの文書を先に保存してください。");
-        var selected=memoSelection(doc), original=doc.Text, context=memoContext(original,selected.top,selected.bottom), links=memoLinks(context);
-        if(!links.length) { alert("このTODOには関連メモがありません。「このTODOにメモを作る」で追加できます。"); return; }
+        var selected=memoSelection(doc), original=doc.Text, context=memoContext(original,selected.top,selected.bottom);
+        var restored=memoRestoreMissingLabels(original,context);
+        if(restored!==original) context=memoContext(restored,selected.top,selected.bottom);
+        var links=memoLinks(context);
+        if(!links.length) { macroMessage("このTODOには関連メモがありません。「このTODOにメモを作る」で追加できます。"); return; }
         var index=0;
         if(links.length > 1) {
             var menu=CreatePopupMenu();
@@ -14,11 +17,8 @@ function main() {
         }
         var fso=new ActiveXObject("Scripting.FileSystemObject"), path=memoResolveTarget(doc.FullName,links[index].target,fso);
         if(!fso.FileExists(path)) throw new Error("関連メモが見つかりません: " + path);
-        var updated=memoCompactLinks(original,context);
-        updated=memoMarkSaved(updated,memoContext(updated,selected.top,selected.bottom),doc.FullName,fso);
-        memoSaveTodo(doc,original,updated,memoStamp(new Date()),fso);
-        memoOpen(path,fso);
-    } catch(e) { alert("関連メモ: " + e.message); }
+        memoOpen(path);
+    } catch(e) { macroMessage("関連メモ: " + e.message); }
 }
 
 var HUB_DIR = "C:\\Projects\\ai-work-hub";
@@ -55,7 +55,7 @@ function memoContext(text, top, bottom) {
         label = i;
     }
     if(label >= 0) for(i = label + 1; i < end; i++) if(memoTrim(lines[i]) && memoIndent(lines[i]) <= memoIndent(lines[label])) { memoEnd = i; break; }
-    return {lines:lines, task:task, end:end, label:label, memoEnd:memoEnd, prefix:parsed[1], title:memoTrim(parsed[2].replace(/\s*<!--[^>]*-->/g,"")), newline:text.indexOf("\r\n") >= 0 ? "\r\n" : "\n"};
+    return {lines:lines, task:task, end:end, label:label, memoEnd:memoEnd, fenced:fenced, prefix:parsed[1], title:memoTrim(parsed[2].replace(/\s*<!--[^>]*-->/g,"")), newline:text.indexOf("\r\n") >= 0 ? "\r\n" : "\n"};
 }
 function memoSelectedBody(context, selected, top, bottom) {
     if(!selected) return "";
@@ -93,6 +93,18 @@ function memoReferences(lines) {
         }
     }
     return refs;
+}
+function memoRestoreMissingLabels(text, context) {
+    var lines=memoLines(text), changed=false;
+    for(var i=context.task+1;i<context.end;i++) {
+        if(context.fenced[i]) continue;
+        var body=memoTrim(lines[i]);
+        if(/^\[(?:\uD83D\uDCC4\s*)?メモ\d+\]\[memo-\d+\]$/.test(body)) {
+            lines[i]=context.prefix+"   関連メモ: "+body;
+            changed=true;
+        }
+    }
+    return changed ? lines.join(context.newline) : text;
 }
 function memoCompactLinks(text, context) {
     var lines=memoLines(text), refs=memoReferences(lines), definitions=[], i, next=1, memoNumber=0;
@@ -237,18 +249,14 @@ function memoWriteNew(path, text) {
     try { stream.Type=2; stream.Charset="utf-8"; stream.Open(); stream.WriteText(text); stream.SaveToFile(path,1); }
     finally { if(stream.State !== 0) stream.Close(); }
 }
-function memoOpen(path, fso) {
-    var target=fso.GetAbsolutePathName(path).toLowerCase();
-    for(var i=0;i<editor.Documents.Count;i++) { var doc=editor.Documents.Item(i); if(doc.FullName && fso.GetAbsolutePathName(doc.FullName).toLowerCase()===target) { doc.Activate(); memoVertical(); return doc; } }
-    var text=memoReadText(path); editor.NewFile(); var opened=editor.ActiveDocument;
-    opened.Text=text; opened.Save(path); memoVertical(); opened.selection.StartOfDocument(false); return opened;
+function memoOpen(path) {
+    getMeryEditor().OpenFile(path, 0, meOpenAllowNewWindow);
 }
-function memoVertical() {
-    // 縦書きはトグル式なので、現在のチェック状態を確認してから切り替える。
-    var status=editor.QueryStatusByID(2238);
-    if((status & 2)!==0) return;
-    if((status & 1)===0) throw new Error("TXTは開きました。［表示］→［縦書き］で切り替えてください。");
-    editor.ExecuteCommandByID(2238);
+
+function getMeryEditor() {
+    if (typeof editor !== "undefined") return editor;
+    if (typeof Editor !== "undefined") return Editor;
+    throw new Error("Meryのエディターオブジェクトを取得できません。");
 }
 function memoSelection(doc) {
     var sel=doc.selection;
@@ -262,3 +270,7 @@ function memoCheckSync(fso) {
 }
 
 main();
+
+function macroMessage(message) {
+    new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 0x30);
+}

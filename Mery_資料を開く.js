@@ -257,7 +257,7 @@ function assetResolve(docPath,target,fso) {
 function assetLinks(context) {
     var refs=memoReferences(context.lines),links=[],seen={};
     for(var i=context.task+1;i<context.end;i++) {
-        if(!/^\s+資料[:：]\s*/.test(context.lines[i])) continue;
+        if(!/^\s+資料[:：]\s*/.test(context.lines[i]) && !/^[ \t]+\[(?:PDF|画像): [^\]]+\]\[img-\d+\][ \t]*$/.test(context.lines[i])) continue;
         var re=/\[([^\]]+)\](?:\(([^)]+)\)|\[([^\]]+)\])/g, m;
         while((m=re.exec(context.lines[i]))!==null) {
             var target=m[2] || refs["$"+m[3].toLowerCase()];
@@ -326,9 +326,13 @@ function assetMain(mode) {
         var base=fso.GetAbsolutePathName(fso.GetParentFolderName(doc.FullName)).toLowerCase();
         var target=(base===fso.GetAbsolutePathName(HUB_DIR).toLowerCase()?"img/":IMG_DIR.replace(/\\/g,"/")+"/")+encodeURIComponent(fso.GetFileName(path));
         var existing=assetLinks(context);
-        for(var j=0;j<existing.length;j++) if(assetResolve(doc.FullName,existing[j].target,fso).toLowerCase()===path.toLowerCase()) { alert("この資料はすでに付いています。");return; }
+        for(var j=0;j<existing.length;j++) if(assetResolve(doc.FullName,existing[j].target,fso).toLowerCase()===path.toLowerCase()) { macroMessage("この資料はすでに付いています。");return; }
         memoSaveTodo(doc,original,assetInsert(context,target,label),memoStamp(new Date()),fso);
-    } catch(e) { alert("資料: "+e.message+(copied ? "\n\nコピー済みの資料: "+copied : "")); }
+    } catch(e) { macroMessage("資料: "+e.message+(copied ? "\n\nコピー済みの資料: "+copied : "")); }
+}
+
+function macroMessage(message) {
+    new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 0x30);
 }
 
 assetMain("open");

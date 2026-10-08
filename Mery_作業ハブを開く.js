@@ -57,7 +57,7 @@ function main() {
         showFileInSingleTab(HUB_DIR + "\\TASKS.md");
     }
     catch (e) {
-        editor.Alert("作業ハブを開けませんでした: " + e.message);
+        macroMessage("作業ハブを開けませんでした: " + e.message);
     }
 }
 
@@ -81,11 +81,22 @@ function normalizePath(path) {
     return fso.GetAbsolutePathName(path).toLowerCase();
 }
 
+function getMeryEditor() {
+    if (typeof editor !== "undefined") {
+        return editor;
+    }
+    if (typeof Editor !== "undefined") {
+        return Editor;
+    }
+    throw new Error("Meryのエディターオブジェクトを取得できません。");
+}
+
 function findOpenDocumentByFullName(fullPath) {
     var target = normalizePath(fullPath);
+    var activeEditor = getMeryEditor();
 
-    for (var i = 0; i < editor.Documents.Count; i++) {
-        var d = editor.Documents.Item(i);
+    for (var i = 0; i < activeEditor.Documents.Count; i++) {
+        var d = activeEditor.Documents.Item(i);
         if (!d.FullName) {
             continue;
         }
@@ -98,47 +109,14 @@ function findOpenDocumentByFullName(fullPath) {
 }
 
 function showFileInSingleTab(fullPath) {
+    var activeEditor = getMeryEditor();
     var opened = findOpenDocumentByFullName(fullPath);
     if (opened) {
         opened.Activate();
         return;
     }
 
-    // editor.OpenFile は環境によって現在タブを置き換えることがあるため使わない。
-    // NewFile → Text設定 → Save で、既存タブを壊しにくい形にする。
-    var text = readUtf8Text(fullPath);
-    editor.NewFile();
-    var d = editor.ActiveDocument;
-    d.Text = text;
-    d.Save(fullPath);
-}
-
-function readUtf8Text(path) {
-    var fso = new ActiveXObject("Scripting.FileSystemObject");
-    if (!fso.FileExists(path)) {
-        return "";
-    }
-
-    // BOM を調べ、既存の UTF-16 ファイルも正しく読む。新規保存は UTF-8。
-    var stream = new ActiveXObject("ADODB.Stream");
-    try {
-        stream.Type = 2;
-        stream.Charset = "iso-8859-1";
-        stream.Open();
-        stream.LoadFromFile(path);
-        var prefix = stream.ReadText(3);
-        stream.Position = 0;
-        if (prefix.charCodeAt(0) === 255 && prefix.charCodeAt(1) === 254) {
-            stream.Charset = "unicode";
-        } else if (prefix.charCodeAt(0) === 254 && prefix.charCodeAt(1) === 255) {
-            stream.Charset = "unicodeFFFE";
-        } else {
-            stream.Charset = "utf-8";
-        }
-        return stream.ReadText().replace(/^\uFEFF/, "");
-    } finally {
-        if (stream.State !== 0) stream.Close();
-    }
+    activeEditor.OpenFile(fullPath, 0, meOpenAllowNewWindow);
 }
 
 function writeUtf8Text(path, text) {
@@ -193,4 +171,8 @@ function buildCommandTemplate() {
         + "- 後で\r\n"
         + "- LOG候補\r\n"
         + "- TODO.md反映候補\r\n";
+}
+
+function macroMessage(message) {
+    new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 0x30);
 }

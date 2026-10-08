@@ -19,5 +19,5 @@ mockHex=null;const secure=context.createSecureRandom();for(let i=0;i<5000;i++){c
 const before=calls,three=context.randomizeThreeTimes(text,'2026-10-05');assert.equal(calls-before,3);assert.notEqual(three,text);assert.ok(three.includes('- [ ] A\n  details A'));assert.ok(three.endsWith('### 後で\n- [ ] unchanged\n'));for(const command of commands.slice(-3)){assert.ok(command.includes('randomInt(100,601)'));assert.ok(command.indexOf('Atomics.wait')<command.indexOf('randomBytes'));}
 const menu=fs.readFileSync(require('node:path').join(__dirname,'..','Mery_作業メニュー.js'),'utf8').replace(/^\uFEFF/,'').replace(/^#.*$/gm,'');let executed;
 vm.runInNewContext(menu,{ScriptFullName:'C:\\Mery\\Macros\\Mery_作業メニュー.js',ActiveXObject:function(){return{GetParentFolderName:p=>p.substring(0,p.lastIndexOf('\\')),BuildPath:(d,f)=>d+'\\'+f,FileExists:()=>true}},CreatePopupMenu:()=>({Add(){},Track:()=>15}),meMenuSeparator:0,editor:{ExecuteMacro:name=>{executed=name;}},alert:message=>{throw new Error(message);}});
-assert.equal(executed,'Mery_TASKS今日やるをランダムに並べ替える.js');
+assert.equal(executed,'C:\\Mery\\Macros\\Mery_TASKS今日やるをランダムに並べ替える.js');
 console.log('PASS: task blocks, group headings, exclusions, duplicate guard, secure random refill, rejection sampling, menu dispatch');
