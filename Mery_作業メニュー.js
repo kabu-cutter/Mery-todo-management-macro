@@ -25,6 +25,7 @@ var MENU_ADD_ASSET = 19;
 var MENU_OPEN_ASSET = 20;
 var MENU_GOALS = 21;
 var MENU_BUTTON_GUIDE = 22;
+var MENU_FORMAT_MEMO_INDENT = 23;
 
 var MACRO_OPEN_HUB = "Mery_作業ハブを開く.js";
 var MACRO_START_TEMPLATE = "Mery_今日の開始テンプレートを挿入.js";
@@ -41,6 +42,7 @@ var MACRO_REFLECT_OUTBOX_END = "Mery_OUTBOX選択範囲を末尾に反映.js";
 var MACRO_GEMINI_GROUP_TODAY = "Mery_TASKS今日やるをGeminiでグループ分け.js";
 var MACRO_GOOGLE_CALENDAR = "Mery_Googleカレンダーと同期.js";
 var MACRO_GOALS = "Mery_目標管理.js";
+var MACRO_FORMAT_MEMO_INDENT = "Mery_TASKSメモ欄のインデントを整える.js";
 
 main();
 
@@ -69,6 +71,7 @@ function main() {
         menu.Add("OUTBOX選択範囲を末尾に反映", MENU_REFLECT_OUTBOX_END);
         menu.Add("", 0, meMenuSeparator);
         menu.Add("このTODOにメモを作る", MENU_CREATE_MEMO);
+        menu.Add("TASKS.mdのメモ欄のインデントを整える", MENU_FORMAT_MEMO_INDENT);
         menu.Add("関連メモを開く", MENU_OPEN_MEMO);
         menu.Add("資料を追加", MENU_ADD_ASSET);
         menu.Add("資料を開く", MENU_OPEN_ASSET);
@@ -101,6 +104,7 @@ function main() {
         if (selected === MENU_REFLECT_OUTBOX_END) return runMacro(MACRO_REFLECT_OUTBOX_END);
         if (selected === MENU_RANDOM_TODAY) return runMacro("Mery_TASKS今日やるをランダムに並べ替える.js");
         if (selected === MENU_CREATE_MEMO) return runMacro("Mery_このTODOにメモを作る.js");
+        if (selected === MENU_FORMAT_MEMO_INDENT) return runMacro(MACRO_FORMAT_MEMO_INDENT);
         if (selected === MENU_OPEN_MEMO) return runMacro("Mery_関連メモを開く.js");
         if (selected === MENU_BACKUP) return runMacro("Mery_バックアップ.js");
         if (selected === MENU_ADD_ASSET) return runMacro("Mery_資料を追加.js");

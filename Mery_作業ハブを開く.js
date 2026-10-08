@@ -57,7 +57,7 @@ function main() {
         showFileInSingleTab(HUB_DIR + "\\TASKS.md");
     }
     catch (e) {
-        alert("作業ハブを開けませんでした: " + e.message);
+        editor.Alert("作業ハブを開けませんでした: " + e.message);
     }
 }
 

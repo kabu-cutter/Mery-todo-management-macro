@@ -29,3 +29,13 @@ test('button guide explains how to launch the parent macro from the macro bar',(
  assert.match(alertMessage,/ボタンを押したときに実行します/);
  assert.match(alertMessage,/起動時の自動実行は設定しません/);
 });
+
+test('memo indentation formatter is available from the work menu',()=>{
+ const items=[],calls=[];
+ context.CreatePopupMenu=()=>({Add:(...args)=>items.push(args),Track:()=>23});
+ context.meMenuSeparator=0;context.meMenuGrayed=1;
+ context.editor={ExecuteMacro:name=>calls.push(name)};
+ context.main();
+ assert.ok(items.some(item=>item[0]==='TASKS.mdのメモ欄のインデントを整える'));
+ assert.deepEqual(calls,['Mery_TASKSメモ欄のインデントを整える.js']);
+});
