@@ -160,7 +160,6 @@ function compactGoalIds(input, parsedItems) {
   let next = Math.max(0, ...[...map.aliases.keys()].map(alias => parseInt(alias, 36)));
   let changed = false;
   for (const item of items) {
-    if (!['year','month','week'].includes(item.type)) continue;
     let alias = map.ids.get(item.id);
     if (!alias) {
       alias = (++next).toString(36);

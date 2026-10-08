@@ -16,15 +16,17 @@ const source='## 2026年\n'+
   '    - [ ] 2026-W41 Week <!-- mery-goal-id:'+ids[2]+' -->\n'+
   '      - [ ] Action <!-- mery-goal-id:'+ids[3]+' -->\n';
 
-test('short period references preserve every full sync ID and leave TODO markers alone',()=>{
+test('short references preserve full sync IDs for periods and action TODOs',()=>{
   const before=core.parseGoals(source,{assignIds:false});
   const compact=core.parseGoals(source,{assignIds:false,compactPeriodIds:true});
   assert.deepEqual(compact.items.map(item=>item.id),ids);
   assert.match(compact.text,/<!--g:1-->/);
   assert.match(compact.text,/<!--g:2-->/);
   assert.match(compact.text,/<!--g:3-->/);
+  assert.match(compact.text,/Action <!--g:4-->/);
   assert.match(compact.text,/<!-- mery-goal-id-map\n1=0123456789abcdef0123456789abcdef/);
-  assert.match(compact.text,new RegExp('<!-- mery-goal-id:'+ids[3]+' -->'));
+  assert.match(compact.text,new RegExp('4='+ids[3]));
+  assert.doesNotMatch(compact.text,/<!-- mery-goal-id:/);
   const after=core.parseGoals(compact.text,{assignIds:false});
   const fields=item=>[item.id,item.type,item.title,item.period,item.parentId,item.due];
   assert.deepEqual(after.items.map(fields),before.items.map(fields));
@@ -47,10 +49,20 @@ test('new period IDs extend the local map without renumbering existing reference
   const added=compact.replace('## 2026年\n','## 2026年\n- [ ] 2026年 Another annual goal\n');
   const nextId='44444444444444444444444444444444';
   const result=core.parseGoals(added,{assignIds:true,compactPeriodIds:true,idFactory:()=>nextId});
-  assert.match(result.text,/Another annual goal <!--g:4-->/);
-  assert.match(result.text,/4=44444444444444444444444444444444/);
+  assert.match(result.text,/Another annual goal <!--g:5-->/);
+  assert.match(result.text,/5=44444444444444444444444444444444/);
   assert.deepEqual(result.items.slice(1).map(item=>item.id),ids);
   assert.equal(core.parseGoals(result.text,{assignIds:false,compactPeriodIds:true}).text,result.text);
+});
+
+test('new action TODOs also receive short references',()=>{
+  const compact=core.parseGoals(source,{assignIds:false,compactPeriodIds:true}).text;
+  const added=compact.replace('      - [ ] Action <!--g:4-->','      - [ ] Action <!--g:4-->\n      - [ ] New action');
+  const nextId='55555555555555555555555555555555';
+  const result=core.parseGoals(added,{assignIds:true,compactPeriodIds:true,idFactory:()=>nextId});
+  assert.match(result.text,/New action <!--g:5-->/);
+  assert.match(result.text,/5=55555555555555555555555555555555/);
+  assert.deepEqual(result.items.slice(0,4).map(item=>item.id),ids);
 });
 
 test('Thunderbird edits retain the short reference and full calendar UID',()=>{
@@ -63,4 +75,14 @@ test('Thunderbird edits retain the short reference and full calendar UID',()=>{
   assert.match(result.goals,/Updated in Thunderbird <!--g:2-->/);
   assert.equal(core.parseGoals(result.goals,{assignIds:false}).items[1].id,month.id);
   assert.equal(core.uidFor(month.id),month.id+'@local.merytodo');
+});
+
+test('Thunderbird action TODO edits keep its short reference',()=>{
+  const compact=core.parseGoals(source,{assignIds:false,compactPeriodIds:true});
+  const todo=compact.items[3];
+  const result=sync.applyRemote(compact.items,compact.text,[],'',[
+    {id:todo.id,action:'pull',local:todo,remote:{...todo,title:'Updated action',source:'goals'}}
+  ]);
+  assert.match(result.goals,/Updated action <!--g:4-->/);
+  assert.equal(core.parseGoals(result.goals,{assignIds:false}).items[3].id,todo.id);
 });
