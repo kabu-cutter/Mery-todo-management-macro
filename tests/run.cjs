@@ -20,6 +20,27 @@ async function main() {
   await test('all macro bodies parse after removing Mery metadata', () => {
     for (const name of fs.readdirSync(root).filter(n=>n.endsWith('.js'))) new vm.Script(source(name), {filename:name});
   });
+  await test('today template carries forward open tasks without old times or sync IDs, retaining due dates and assets', () => {
+    const c = load('Mery_今日の開始テンプレートを挿入.js');
+    const prior = '# TASKS\n\n## 2026-10-08 (木) 今日の作業\n'
+      + '### 今日やる\n#### 資料\n'
+      + '- [ ] 資料整理 10/08/2026 3:07 PM - 10/08/2026 4:12 PM <!-- mery-calendar:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --> <!-- mery-due:2026-10-08 -->\n'
+      + '  - メモと [資料](docs/guide.md)\n'
+      + '  資料: [PDF: ノート][img-2]\n'
+      + '- [x] 完了済み\n'
+      + '### 次にやる\n- [ ] 次の作業 @15:00-15:30\n\n---\n';
+    const copied = c.copyPreviousDayTasks(prior, '2026-10-10 (土)');
+    const template = c.buildStartTemplate('2026-10-10 (土)', copied);
+    assert.equal(copied.count, 2);
+    assert.ok(template.includes('#### 資料\n- [ ] 資料整理 <!-- mery-due:2026-10-08 -->\n  - メモと [資料](docs/guide.md)\n  資料: [PDF: ノート][img-2]'));
+    assert.ok(template.includes('- [ ] 次の作業'));
+    assert.ok(!template.includes('完了済み'));
+    assert.ok(!template.includes('10/08/2026') && !template.includes('@15:00-15:30'));
+    assert.ok(!template.includes('mery-calendar:') && template.includes('mery-due:2026-10-08'));
+    assert.ok(prior.includes('10/08/2026 3:07 PM') && prior.includes('mery-calendar:aaaaaaaa'));
+    const full = c.insertTemplate(prior + '\n[img-2]: img/note.pdf\n', template);
+    assert.ok(full.includes('[PDF: ノート][img-2]') && full.includes('[img-2]: img/note.pdf'));
+  });
   for (const [name, fn] of [['Mery_TASKS今日分の重複項目を整理.js','normalizeTodayTasks'], ['Mery_選択範囲を今日のTASKS欄へ追加.js','normalizeTodayTasksText']]) {
     await test(name + ': preserve other dates between duplicates', () => {
       const c = load(name);

@@ -202,7 +202,10 @@ function toIcs(item, stamp = new Date().toISOString()) {
   lines.push('X-MERY-SOURCE:' + (item.source || 'goals'));
   if(item.section)lines.push('X-MERY-SECTION:' + escapeText(item.section));
   if (type === 'VEVENT') {
-    lines.push('DTSTART;VALUE=DATE:' + dateKey(item.start), 'DTEND;VALUE=DATE:' + dateKey(item.end));
+    if(item.startTime||item.endTime){
+      if(item.source!=='standalone'||!validDate(item.start)||!validDate(item.end)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(item.startTime||'')||!/^([01]\d|2[0-3]):[0-5]\d$/.test(item.endTime||''))throw new Error('時刻付き予定の日付または時刻が不正です。');
+      lines.push('DTSTART;TZID=Asia/Tokyo:' + formatDateTime(item.start,item.startTime), 'DTEND;TZID=Asia/Tokyo:' + formatDateTime(item.end,item.endTime));
+    }else lines.push('DTSTART;VALUE=DATE:' + dateKey(item.start), 'DTEND;VALUE=DATE:' + dateKey(item.end));
   } else {
     if (item.due) {
       if (item.time) {
@@ -215,6 +218,8 @@ function toIcs(item, stamp = new Date().toISOString()) {
   }
   if(type==='VEVENT')lines.push('X-MERY-DONE:'+(item.done?'TRUE':'FALSE'));
   lines.push('SUMMARY:' + escapeText(item.title));
+  if(type==='VEVENT'&&item.source==='standalone'&&item.description)lines.push('DESCRIPTION:'+escapeText(item.description));
+  if(type==='VEVENT'&&item.source==='standalone'&&item.location)lines.push('LOCATION:'+escapeText(item.location));
   if(type==='VTODO'){
     if(item.category)lines.push('CATEGORIES:'+escapeText(item.category));
     else if(item.source!=='tasks')lines.push('CATEGORIES:'+escapeText(item.type));
@@ -266,7 +271,7 @@ function readIcsItem(component) {
   const summary = prop(component, 'SUMMARY');
   if (!summary) throw new Error('ICSに件名がありません: ' + uid);
   const category=component.type==='todo'?prop(component,'CATEGORIES'):null;
-  const item = {id, uid: uid || uidFor(id), type, source:prop(component,'X-MERY-SOURCE')?.value||'tasks',section:unescapeText(prop(component,'X-MERY-SECTION')?.value||''),category:category?unescapeText(category.value):'',title: unescapeText(summary.value), done: prop(component,'STATUS')?.value?.toUpperCase() === 'COMPLETED' || prop(component,'PERCENT-COMPLETE')?.value === '100' || prop(component,'X-MERY-DONE')?.value?.toUpperCase()==='TRUE', parentId: '', due: '', time: '', start: '', end: ''};
+  const item = {id, uid: uid || uidFor(id), type, source:prop(component,'X-MERY-SOURCE')?.value||'tasks',section:unescapeText(prop(component,'X-MERY-SECTION')?.value||''),category:category?unescapeText(category.value):'',title: unescapeText(summary.value),description:unescapeText(prop(component,'DESCRIPTION')?.value||''),location:unescapeText(prop(component,'LOCATION')?.value||''), done: prop(component,'STATUS')?.value?.toUpperCase() === 'COMPLETED' || prop(component,'PERCENT-COMPLETE')?.value === '100' || prop(component,'X-MERY-DONE')?.value?.toUpperCase()==='TRUE', parentId: '', due: '', time: '', start: '', end: '', startTime:'',endTime:''};
   const parentUid = p['RELATED-TO']?.find(x => /RELTYPE=PARENT/i.test(x.params))?.value;
   if (parentUid) item.parentId = parentUid.replace(/@local\.merytodo$/i, '');
   if (type === 'todo' || type === 'task') {
@@ -280,14 +285,17 @@ function readIcsItem(component) {
     }
   } else {
     const start = parseIcsDate(prop(component,'DTSTART')), end = parseIcsDate(prop(component,'DTEND'));
-    if (typeof start !== 'string' || typeof end !== 'string') throw new Error('目標期間の日付が不正です: ' + uid);
-    item.start = start; item.end = end;
+    if(typeof start==='string'&&typeof end==='string'){item.start=start;item.end=end;}
+    else if(item.source==='standalone'&&start&&end&&typeof start==='object'&&typeof end==='object'){
+      item.start=start.date;item.startTime=start.time;item.end=end.date;item.endTime=end.time;
+      if(!validDate(item.start)||!validDate(item.end)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(item.startTime)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(item.endTime)||item.end+'T'+item.endTime<=item.start+'T'+item.startTime)throw new Error('時刻付き予定の期間が不正です: '+uid);
+    }else throw new Error('目標期間の日付が不正です: ' + uid);
   }
   return item;
 }
 
 function equal(a, b) {
-  const pick = x => ({id:x.id,type:x.type,source:x.source||'goals',section:x.section||'',category:x.category||'',date:x.date||'',title:x.title,done:!!x.done,start:x.start||'',end:x.end||'',due:x.due||'',time:x.time||'',parentId:x.parentId||''});
+  const pick = x => ({id:x.id,type:x.type,source:x.source||'goals',section:x.section||'',category:x.category||'',date:x.date||'',title:x.title,description:x.description||'',location:x.location||'',done:!!x.done,start:x.start||'',startTime:x.startTime||'',end:x.end||'',endTime:x.endTime||'',due:x.due||'',time:x.time||'',parentId:x.parentId||''});
   return JSON.stringify(pick(a)) === JSON.stringify(pick(b));
 }
 function planSync(localItems, remoteItems, entries = {}) {

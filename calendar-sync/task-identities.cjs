@@ -6,7 +6,9 @@ function load(file){if(!fs.existsSync(file))return [];const data=JSON.parse(fs.r
 function restore(text,snapshots,makeId=core.uuid){
   const parsed=core.parseDocument(text,'TASKS',makeId);if(!snapshots.length)return parsed.text;
   const explicit=new Set(text.match(/<!-- mery-calendar:([a-f0-9]{32}) -->/g)?.map(x=>x.match(/[a-f0-9]{32}/)[0])||[]);
-  const context=x=>x.date+'\0'+x.section,key=x=>context(x)+'\0'+x.text;
+  const context=x=>x.date+'\0'+x.section;
+  const identityText=x=>x.text.replace(/\s+\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+[AP]M(?:\s+[-–—]\s+\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+[AP]M)?$/i,'').trim();
+  const key=x=>context(x)+'\0'+identityText(x);
   const newKeys=new Set(parsed.items.map(key));
   const candidates=snapshots.map(s=>({text:s,items:core.parseDocument(s,'TASKS',makeId).items}));
   const chosen=candidates.find(x=>strip(x.text)===strip(text))||candidates.sort((a,b)=>b.items.filter(x=>newKeys.has(key(x))).length-a.items.filter(x=>newKeys.has(key(x))).length)[0];

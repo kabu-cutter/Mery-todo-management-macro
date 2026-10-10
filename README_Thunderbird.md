@@ -26,6 +26,10 @@ http://127.0.0.1:18453/calendars/default/MeryTODO/
 
 年・月・週目標はカレンダーの期間予定、`GOALS.md` の行動TODOと `TASKS.md` の同期対象はThunderbirdのToDoに表示されます。同期はMeryのマクロを実行したときに行います。Thunderbird側で変更した後も、マクロでプレビューしてから反映してください。
 
+`TASKS.md` のToDo行末にMeryの時刻（既定では Shift+F5）を付けると、日付見出しを使ってToDoの時間帯に変換できます。終了時刻を省略すると丸めた開始時刻から30分の固定枠にし、次のTODOの時刻から終了を推定しません。開始・終了を両方書いた場合はその範囲を使います。書式・30分丸め・競合時の扱いは [目標管理](README_目標管理.md) を参照してください。
+
+MeryTODOに単独の時刻付き予定を追加するときは、Thunderbird用Codexスキル `thunderbird-calendar-ics` のMeryTODO CalDAV追加手順を使えます。予定はPC内のCalDAVに直接保存され、Markdown同期ではGOALS.md/TASKS.mdの階層に混ぜず、そのまま保持します。説明と場所も保存し、書き込み後にCalDAVから読み戻して確認します。別のローカルカレンダーへ追加する場合は、従来どおりICSをThunderbirdでインポートします。
+
 `TASKS.md` に同じ件名の行が日付をまたいで複数ある場合、ThunderbirdのToDoには最新日付の行だけを表示します。古い日付の行は `TASKS.md` に履歴として残ります。同じ日付の同名行は別項目として扱います。ToDoが `#### グループ名` の下にある場合、その見出しをThunderbirdのカテゴリに反映します。「Geminiでグループ分け」で作ったグループも、同期後に同じ名前のカテゴリになります。カテゴリの正本はTASKS.mdの見出しで、Thunderbird側だけのカテゴリ変更は次回同期時に戻ります。`GOALS.md` と同じToDoとして双方向に扱うには、件名だけで判断せずIDを明示的に対応付けます。
 
 ## ローカルデータとバックアップ

@@ -8,7 +8,7 @@ const taskIdentities=require('./task-identities.cjs');
 const core=require('./goals-caldav-core.cjs');
 
 const DEFAULT_HUB='C:\\Projects\\ai-work-hub';
-function snapshot(item){return {id:item.id,type:item.type,source:item.source||'goals',section:item.section||'',category:item.category||'',date:item.date||'',title:item.title,done:!!item.done,period:item.period||'',start:item.start||'',end:item.end||'',due:item.due||'',time:item.time||'',parentId:item.parentId||''};}
+function snapshot(item){return {id:item.id,type:item.type,source:item.source||'goals',section:item.section||'',category:item.category||'',date:item.date||'',title:item.title,description:item.description||'',location:item.location||'',done:!!item.done,period:item.period||'',start:item.start||'',startTime:item.startTime||'',end:item.end||'',endTime:item.endTime||'',due:item.due||'',time:item.time||'',parentId:item.parentId||''};}
 function normalizedRemote(item,localOrBase){
   const result={...item};
   if(localOrBase){result.type=localOrBase.type;result.source=localOrBase.source||'goals';if(!result.section)result.section=localOrBase.section||'';result.category=localOrBase.category||'';}
@@ -41,6 +41,28 @@ function parseTaskDocument(input,snapshots=[],options={}){
   let counter=0;
   const makeId=options.apply?taskCore.uuid:()=>crypto.createHash('sha256').update(options.file+'\0'+input+'\0'+(++counter)).digest('hex').slice(0,32);
   const marked=taskIdentities.restore(input,snapshots,makeId),parsed=taskCore.parseDocument(marked,'TASKS',makeId);
+  const items=parsed.items.map(item=>{
+    const stamp=parseMeryTimestampSuffix(item.text);
+    return stamp?{...item,text:stamp.title,timeSource:'mery-timestamp',recordedStart:stamp.start,recordedEnd:stamp.end||''}:{...item,timeSource:''};
+  });
+  const byDate=new Map();
+  for(const item of items)if(item.timeSource){if(!byDate.has(item.date))byDate.set(item.date,[]);byDate.get(item.date).push(item);}
+  const timeNotes=[];
+  for(const [date,records] of byDate){
+    for(let i=0;i<records.length;i++){
+      const item=records[i];
+      let end=item.recordedEnd;
+      if(!end){
+        const endMinutes=Number(item.recordedStart.slice(0,2))*60+Number(item.recordedStart.slice(3))+30;
+        if(endMinutes>=1440)throw new Error('終了時刻のないTASKS.mdのTODOに30分枠を設定すると翌日になります。終了時刻を明記してください: '+date+' / '+item.text);
+        end=String(Math.floor(endMinutes/60)).padStart(2,'0')+':'+String(endMinutes%60).padStart(2,'0');
+      }
+      if(item.recordedStart>=end)throw new Error('TASKS.mdの時刻付きTODOは開始・終了が同日内で、開始 < 終了である必要があります: '+date+' / '+item.text);
+      item.start=item.recordedStart;item.end=end;
+    }
+    const intervals=records.filter(item=>item.start&&item.end).sort((a,b)=>a.start.localeCompare(b.start));
+    for(let i=1;i<intervals.length;i++)if(intervals[i].start<intervals[i-1].end)throw new Error('TASKS.mdの時刻付きTODOが重なっています。時刻を確認してください: '+date+' / '+intervals[i-1].text+' / '+intervals[i].text);
+  }
   let section='',category='';const categories=new Map();
   for(const [index,line] of parsed.text.split('\n').entries()){
     if(/^##\s/.test(line)){section='';category='';continue;}
@@ -51,7 +73,24 @@ function parseTaskDocument(input,snapshots=[],options={}){
     if(/^#{1,2}\s/.test(line)){category='';continue;}
     if(section&&/^[-*]\s+\[[ xX]\]/.test(line))categories.set(index,category);
   }
-  return {text:parsed.text,items:parsed.items.map(item=>({id:item.id,type:'todo',source:'tasks',section:item.section,category:categories.get(item.index)||'',date:item.date,title:item.text,done:item.done,period:'',start:'',end:'',due:item.date||'',time:item.start&&item.end?item.start+'-'+item.end:'',parentId:'',index:item.index,taskKind:'TASKS',taskStart:item.start,taskEnd:item.end}))};
+  return {text:parsed.text,timeNotes,items:items.map(item=>({id:item.id,type:'todo',source:'tasks',section:item.section,category:categories.get(item.index)||'',date:item.date,title:item.text,done:item.done,period:'',start:'',end:'',due:item.date||'',time:item.start&&item.end?item.start+'-'+item.end:'',timeSource:item.timeSource||'',parentId:'',index:item.index,taskKind:'TASKS',taskStart:item.start,taskEnd:item.end}))};
+}
+function parseMeryTimestampSuffix(value){
+  const stamp='(\\d{1,2}\\/\\d{1,2}\\/\\d{4}\\s+\\d{1,2}:\\d{2}\\s+[AP]M)';
+  const match=new RegExp('\\s+'+stamp+'(?:\\s+[-–—]\\s+'+stamp+')?\\s*$','i').exec(String(value));
+  if(!match)return null;
+  const parse=raw=>{
+    const parts=/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})\s+([AP]M)$/i.exec(raw);
+    if(!parts)throw new Error('Meryの時刻形式を読み取れません: '+raw);
+    const month=Number(parts[1]),day=Number(parts[2]),year=Number(parts[3]),hour=Number(parts[4]),minute=Number(parts[5]);
+    const date=new Date(Date.UTC(year,month-1,day));
+    if(date.getUTCFullYear()!==year||date.getUTCMonth()!==month-1||date.getUTCDate()!==day||hour<1||hour>12||minute>59)throw new Error('Meryの時刻が不正です: '+raw);
+    const hour24=(hour%12)+(parts[6].toUpperCase()==='PM'?12:0);
+    const rounded=Math.floor((hour24*60+minute+15)/30)*30;
+    if(rounded>=1440)throw new Error('Meryの時刻を30分単位に丸めると翌日になります。日をまたぐ時刻は対応していません: '+raw);
+    return String(Math.floor(rounded/60)).padStart(2,'0')+':'+String(rounded%60).padStart(2,'0');
+  };
+  return {raw:match[0].trim(),title:String(value).slice(0,match.index).trim(),start:parse(match[1]),end:match[2]?parse(match[2]):''};
 }
 function attachLinkedTaskCategories(goalItems,taskItems,links){
   const tasks=new Map(taskItems.map(item=>[item.id,item]));
@@ -152,6 +191,7 @@ function hasTaskDetails(lines,index){
 function replaceTaskFromThunderbird(lines,id,remote,today){
   const current=taskCore.parseDocument(lines.join('\n'),'TASKS').items.find(x=>x.id===id);
   if(!current)throw new Error('TASKS.mdの同期対象行を特定できません: '+id);
+  const meryStamp=parseMeryTimestampSuffix(current.text);
   const currentCategory=taskCategoryAt(lines,current.index);
   const date=remote.due||today,section=remote.section||current.section;
   if(date!==current.date||section!==current.section){
@@ -163,14 +203,19 @@ function replaceTaskFromThunderbird(lines,id,remote,today){
     const moved=taskCore.applyItems({TASKS:lines.join('\n'),LOG:''},[update],[]).TASKS.split('\n');
     const newIndex=moved.findIndex(line=>line.match(taskCore.MARKER)?.[1]===id);
     if(newIndex<0)throw new Error('移動後のTASKS.md行を確認できません: '+id);
+    if(meryStamp)moved[newIndex]=formatTaskLine(moved[newIndex],remote,meryStamp,id);
     moved.splice(newIndex+1,0,...attached);
     if(currentCategory){const block=moved.splice(newIndex,1+attached.length);insertTaskCategoryBlock(moved,date,section,currentCategory,block);}
     return moved;
   }
-  const prefix=lines[current.index].match(/^([-*]\s+)\[[ xX]\]\s*/);
-  if(!prefix)throw new Error('TASKS.mdの同期対象行を特定できません: '+id);
-  lines[current.index]=prefix[1]+'['+(remote.done?'x':' ')+'] '+remote.title+(remote.time?' @'+remote.time:'')+' <!-- mery-calendar:'+id+' -->';
+  lines[current.index]=formatTaskLine(lines[current.index],remote,meryStamp,id);
   return lines;
+}
+function formatTaskLine(original,remote,meryStamp,id){
+  const prefix=original.match(/^([-*]\s+)\[[ xX]\]\s*/);
+  if(!prefix)throw new Error('TASKS.mdの同期対象行を更新できません: '+id);
+  const suffix=meryStamp?' '+meryStamp.raw:(remote.time?' @'+remote.time:'');
+  return prefix[1]+'['+(remote.done?'x':' ')+'] '+remote.title+suffix+' <!-- mery-calendar:'+id+' -->';
 }
 function loadGoalTaskLinks(file){
   if(!fs.existsSync(file))return [];
@@ -271,7 +316,7 @@ function applyRemote(goalItems,goalText,taskItems,taskText,operations,today=new 
   }
   return {goals:updatedGoals,tasks:updatedTasks};
 }
-function reportText(operations,errors=[],applied=false){
+function reportText(operations,errors=[],applied=false,timeNotes=[]){
   const labels={push:'MeryTODOからCalDAVへ反映',pull:'CalDAVからGOALS.mdへ反映',merge:'別項目の変更をマージ',adopt:'変更なし',conflict:'競合・確認が必要',deleteRemote:'CalDAV項目を削除',deleteLocal:'GOALS.md項目を削除',forget:'同期情報を整理'};
   let text='# MeryTODO CalDAV '+(applied?'同期結果':'同期プレビュー')+'\n\n';
   for(const [action,label] of Object.entries(labels))text+='- '+label+': '+operations.filter(x=>x.action===action).length+'件\n';
@@ -285,6 +330,7 @@ function reportText(operations,errors=[],applied=false){
       text+='\n';
     }
   }
+  if(timeNotes.length)text+='## 時刻記録メモ\n\n'+timeNotes.map(note=>'- '+note).join('\n')+'\n\n';
   for(const error of errors)text+='## 要確認\n\n'+error+'\n\n';
   return text;
 }
@@ -327,6 +373,9 @@ function run(options={}){
     for(const resource of resources){
       const item=core.parseIcs(resource.ical)[0];
       if(!item)continue;
+      // Standalone events are managed directly in the CalDAV calendar, not in GOALS.md/TASKS.md.
+      // Keep them stored and visible to Thunderbird while excluding them from Markdown reconciliation.
+      if(item.source==='standalone'&&item.type==='event')continue;
       item.href=resource.href;item.etag=resource.etag;
       const localMatch=local.find(x=>x.id===item.id),base=entries[item.id];
       if(localMatch)item.type=localMatch.type;
@@ -337,6 +386,13 @@ function run(options={}){
       remote.push(normalized);
     }
     const operations=core.planSync(local,remote,entries),errors=[];
+    const timestampTaskIds=new Set(taskParsed.items.filter(item=>item.timeSource==='mery-timestamp').map(item=>item.id));
+    for(const op of operations){
+      if(timestampTaskIds.has(op.id)&&op.remote&&op.base&&op.remote.time!==op.base.remote.time){
+        op.action='conflict';op.conflictFields=['time'];
+        errors.push('Meryの時刻記録から作った時間がThunderbird側で変更されています。TASKS.mdの時刻を編集して再同期してください: '+(op.local?.title||op.remote.title));
+      }
+    }
     for(const op of operations){
       if(linkedTaskIds.has(op.id)){
         if(op.remote&&(!op.base||!core.equal(op.remote,op.base.remote))){op.action='conflict';op.conflictFields=['linkedTask'];errors.push('連動前のTASKS.md側ToDoがThunderbirdで変更されています。統合を保留します: '+op.remote.title);}
@@ -423,4 +479,4 @@ if(require.main===module){
     process.exitCode=1;
   }
 }
-module.exports={snapshot,normalizedRemote,parseTaskDocument,replaceItemLine,insertItem,reconcileGoalTaskLinks,selectLatestTaskItems,applyRemote,reportText,run};
+module.exports={snapshot,normalizedRemote,parseTaskDocument,parseMeryTimestampSuffix,replaceTaskFromThunderbird,replaceItemLine,insertItem,reconcileGoalTaskLinks,selectLatestTaskItems,applyRemote,reportText,run};

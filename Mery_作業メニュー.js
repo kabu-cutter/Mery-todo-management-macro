@@ -57,7 +57,7 @@ function main() {
 
         menu.Add("作業ハブを開く", MENU_OPEN_HUB);
         menu.Add("", 0, meMenuSeparator);
-        menu.Add("今日の開始テンプレートを挿入", MENU_START_TEMPLATE);
+        menu.Add("今日の開始テンプレートを挿入（前日の未完了TODOを引き継ぐ）", MENU_START_TEMPLATE);
         menu.Add(goalsMacroPresent ? "年・月・週の目標と期限を管理" : "年・月・週の目標と期限を管理（マクロ未配置）", MENU_GOALS, goalsMacroPresent ? 0 : meMenuGrayed);
         menu.Add("プロジェクトTODO.mdを読み込む", MENU_LOAD_PROJECT_TODO);
         menu.Add("TASKS.md 今日分の重複項目を整理", MENU_MERGE_TASKS_DUPLICATES);

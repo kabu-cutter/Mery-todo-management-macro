@@ -41,36 +41,128 @@ function main() {
             return;
         }
 
-        var template = buildStartTemplate(today);
+        var copied = copyPreviousDayTasks(currentText, today);
+        var template = buildStartTemplate(today, copied);
         var newText = insertTemplate(currentText, template);
 
         targetDoc.Text = newText;
         targetDoc.Save(TASKS_PATH);
 
         targetDoc.selection.StartOfDocument(false);
-        alert("今日の開始テンプレートを TASKS.md に挿入しました。");
+        alert(copied.count
+            ? "今日の開始テンプレートを TASKS.md に挿入しました。\n"
+                + copied.count + " 件の未完了TODOを " + copied.sourceDate + " から引き継ぎました。\n"
+                + "時刻と同期IDは今日の複製から除き、元の日付のTODOには残しています。"
+            : "今日の開始テンプレートを TASKS.md に挿入しました。\n引き継ぐ未完了TODOはありませんでした。");
 
     } catch (e) {
         alert("エラー: " + e.message);
     }
 }
 
-function buildStartTemplate(today) {
-    return ""
-        + "## " + today + " 今日の作業\n\n"
-        + "### 今日やる\n"
-        + "- [ ] \n\n"
-        + "### 次にやる\n"
-        + "- [ ] \n\n"
-        + "### 後で\n"
-        + "- [ ] \n\n"
-        + "### 置く\n"
-        + "- [ ] \n\n"
-        + "### 確認が必要\n"
-        + "- [ ] \n\n"
-        + "### メモ\n"
-        + "- [ ] \n\n"
-        + "---\n\n";
+function buildStartTemplate(today, copied) {
+    var sections = ["今日やる", "次にやる", "後で", "置く", "確認が必要", "メモ"];
+    var copiedSections = copied && copied.sections ? copied.sections : {};
+    var result = "## " + today + " 今日の作業\n\n";
+    for (var i = 0; i < sections.length; i++) {
+        var name = sections[i];
+        result += "### " + name + "\n";
+        result += copiedSections[name] || "- [ ] \n";
+        result += "\n";
+    }
+    // 前日側にあるカスタム欄も、TODOがある場合は引き継ぐ。
+    if (copied && copied.extraSections) {
+        for (var j = 0; j < copied.extraSections.length; j++) {
+            result += copied.extraSections[j] + "\n";
+        }
+    }
+    return result + "---\n\n";
+}
+
+function copyPreviousDayTasks(text, today) {
+    var normalized = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    var lines = normalized.split("\n");
+    var todayDate = String(today).substring(0, 10);
+    var sourceStart = -1;
+    var sourceDate = "";
+    for (var i = 0; i < lines.length; i++) {
+        var heading = lines[i].match(/^##\s+(\d{4}-\d{2}-\d{2})(?:\s+\([^)]*\))?\s+今日の作業\s*$/);
+        if (heading && heading[1] < todayDate && heading[1] >= sourceDate) {
+            sourceDate = heading[1];
+            sourceStart = i;
+        }
+    }
+    if (sourceStart < 0) return { sections: {}, extraSections: [], sourceDate: "", count: 0 };
+
+    var sourceEnd = lines.length;
+    for (var end = sourceStart + 1; end < lines.length; end++) {
+        if (/^##\s/.test(lines[end])) { sourceEnd = end; break; }
+    }
+    var sections = {};
+    var extraSections = [];
+    var currentSection = "";
+    var currentCategory = "";
+    var count = 0;
+    var pending = [];
+    var pendingDone = false;
+
+    function flushTask() {
+        if (!pending.length) return;
+        while (pending.length && !pending[pending.length - 1].trim()) pending.pop();
+        if (!pendingDone && pending.length) {
+            if (!sections[currentSection]) sections[currentSection] = "";
+            var output = sections[currentSection];
+            if (currentCategory && output.indexOf("#### " + currentCategory + "\n") < 0) {
+                output += "#### " + currentCategory + "\n";
+            }
+            output += pending.join("\n") + "\n";
+            sections[currentSection] = output;
+            count++;
+        }
+        pending = [];
+    }
+
+    for (var lineIndex = sourceStart + 1; lineIndex < sourceEnd; lineIndex++) {
+        var line = lines[lineIndex];
+        var sectionMatch = line.match(/^###\s+(.+?)\s*$/);
+        var categoryMatch = line.match(/^####(?!#)\s*(.+?)\s*$/);
+        if (sectionMatch || categoryMatch || /^---+\s*$/.test(line)) {
+            flushTask();
+            if (sectionMatch) { currentSection = sectionMatch[1]; currentCategory = ""; }
+            else if (categoryMatch) currentCategory = categoryMatch[1];
+            continue;
+        }
+        if (/^[-*]\s+\[[ xX]\]/.test(line)) {
+            flushTask();
+            pendingDone = /^[-*]\s+\[[xX]\]/.test(line);
+            if (!pendingDone) {
+                var cleaned = line.replace(/^([-*]\s+)\[[ xX]\]\s*/, "$1[ ] ");
+                cleaned = cleaned.replace(/\s*<!--\s*mery-calendar:[a-f0-9]+\s*-->/ig, "")
+                    .replace(/\s+\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+[AP]M(?:\s*[-–—]\s*\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+[AP]M)?(?=\s*(?:<!--\s*mery-due:[^>]*-->\s*)?$)/i, "")
+                    .replace(/\s+@(?:[01]\d|2[0-3]):[0-5]\d(?:-(?:[01]\d|2[0-3]):[0-5]\d)?\s*$/, "");
+                pending.push(cleaned);
+            }
+            continue;
+        }
+        if (pending.length) pending.push(line);
+    }
+    flushTask();
+
+    // Section with no source tasks remains a normal empty slot in today's template.
+    for (var name in sections) {
+        if (Object.prototype.hasOwnProperty.call(sections, name)) {
+            sections[name] = sections[name].replace(/\n+$/, "\n");
+        }
+    }
+    // Preserve custom ### sections instead of dropping their tasks.
+    for (var sectionName in sections) {
+        if (Object.prototype.hasOwnProperty.call(sections, sectionName)
+            && ["今日やる", "次にやる", "後で", "置く", "確認が必要", "メモ"].indexOf(sectionName) < 0) {
+            extraSections.push("### " + sectionName + "\n" + sections[sectionName]);
+            delete sections[sectionName];
+        }
+    }
+    return { sections: sections, extraSections: extraSections, sourceDate: sourceDate, count: count };
 }
 
 function insertTemplate(currentText, template) {
