@@ -46,4 +46,6 @@ GOALS.mdで項目を削除した場合、Thunderbird側が同期前のままな�
 
 同じ行動ToDoをGOALS.mdとTASKS.mdの両方に置く場合は、`.mery-calendar\goals-task-links.json` に両方の完全なIDを明示して連動できます。件名と完了状態を双方向に反映し、ThunderbirdにはGOALS.md側のIDで1件だけ表示します。TASKS.mdの日付・欄とGOALS.mdの目標階層はそれぞれ維持します。初回の対応付けではGOALS.md側の値を採用し、TASKS.md側の重複したCalDAV項目を同期プレビューに削除対象として表示します。以後、両方で異なる編集があれば上書きせず停止します。件名だけが同じ別のToDoを自動で連動することはありません。この対応表もMarkdownと一緒にバックアップしてください。
 
+TASKS.mdに同じ件名を別の日付にも記録した場合は、ThunderbirdのToDoには最新日付の1件だけを同期します。過去の日付の行はMeryのTASKS.mdに残り、同じ日付に同名の行が複数ある場合は別々のToDoとして扱います。GOALS.mdとの連動は最新のTASKS行のIDを明示して設定します。
+
 同期はマクロを実行したときに行います。CalDAVサーバーは初回同期でバックグラウンド起動し、Windowsログオン時に自動起動はしません。以前の一方向ICS書き出しファイルは双方向同期には使わないでください。

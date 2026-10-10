@@ -162,6 +162,14 @@ function saveGoalTaskLinks(file,links){
   fs.writeFileSync(temp,JSON.stringify({version:1,links},null,2),'utf8');
   fs.renameSync(temp,file);
 }
+function selectLatestTaskItems(items){
+  const latest=new Map();
+  for(const item of items){
+    const title=item.title.replace(/\s+/g,' ').trim();
+    if(!latest.has(title)||item.date>latest.get(title))latest.set(title,item.date);
+  }
+  return items.filter(item=>item.date===latest.get(item.title.replace(/\s+/g,' ').trim()));
+}
 function applyRemote(goalItems,goalText,taskItems,taskText,operations,today=new Date().toISOString().slice(0,10)){
   const goalOperations=operations.filter(op=>(op.local?.source||op.base?.local.source||op.remote?.source||'goals')!=='tasks');
   const taskOperations=operations.filter(op=>(op.local?.source||op.base?.local.source||op.remote?.source||'goals')==='tasks');
@@ -258,7 +266,7 @@ function run(options={}){
   const store=new GoalCalDavStore(path.join(dir,'goals-caldav.sqlite'));
   try{
     const entries=store.state(),resources=store.resources(),remote=[];
-    const taskItems=taskParsed.items.filter(item=>!linkedTaskIds.has(item.id)&&(item.date>=today||entries[item.id]?.local.source==='tasks'));
+    const taskItems=selectLatestTaskItems(taskParsed.items).filter(item=>!linkedTaskIds.has(item.id)&&(item.date>=today||entries[item.id]?.local.source==='tasks'));
     const local=[...parsed.items.map(snapshot),...taskItems.map(snapshot)];
     if(new Set(local.map(x=>x.id)).size!==local.length)throw new Error('GOALS.md と TASKS.md で同期IDが重複しています。ID情報を確認してください.');
     for(const resource of resources){
@@ -359,4 +367,4 @@ if(require.main===module){
     process.exitCode=1;
   }
 }
-module.exports={snapshot,normalizedRemote,parseTaskDocument,replaceItemLine,insertItem,reconcileGoalTaskLinks,applyRemote,reportText,run};
+module.exports={snapshot,normalizedRemote,parseTaskDocument,replaceItemLine,insertItem,reconcileGoalTaskLinks,selectLatestTaskItems,applyRemote,reportText,run};

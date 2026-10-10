@@ -26,6 +26,8 @@ http://127.0.0.1:18453/calendars/default/MeryTODO/
 
 年・月・週目標はカレンダーの期間予定、`GOALS.md` の行動TODOと `TASKS.md` の同期対象はThunderbirdのToDoに表示されます。同期はMeryのマクロを実行したときに行います。Thunderbird側で変更した後も、マクロでプレビューしてから反映してください。
 
+`TASKS.md` に同じ件名の行が日付をまたいで複数ある場合、ThunderbirdのToDoには最新日付の行だけを表示します。古い日付の行は `TASKS.md` に履歴として残ります。同じ日付の同名行は別項目として扱います。`GOALS.md` と同じToDoとして双方向に扱うには、件名だけで判断せずIDを明示的に対応付けます。
+
 ## ローカルデータとバックアップ
 
 正本は作業ハブの `GOALS.md` と `TASKS.md` です。`GOALS.md` 末尾の `mery-goal-id-map` は、各目標行の短い参照番号と完全な同期IDの対応表なので消さないでください。`.mery-calendar` にはCalDAVのデータベースと `TASKS.md` のID対応を保存します。バックアップやPC移行時は、Markdownファイルと `.mery-calendar` を一緒に保存します。これらは個人データなので、公開するGitHubリポジトリには含めません。

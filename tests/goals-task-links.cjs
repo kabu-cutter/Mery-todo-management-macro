@@ -56,3 +56,30 @@ test('linked TASKS item retires its separate CalDAV ToDo while keeping both loca
     if(path.dirname(hub)===__dirname&&path.basename(hub).startsWith('.goal-link-test-'))fs.rmSync(hub,{recursive:true,force:true});
   }
 });
+
+test('only the latest dated copy of a TASKS ToDo remains in CalDAV',()=>{
+  const hub=fs.mkdtempSync(path.join(__dirname,'.goal-link-test-'));
+  const oldId='c'.repeat(32),newId='d'.repeat(32);
+  try{
+    const dir=path.join(hub,'.mery-calendar');fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(hub,'GOALS.md'),goals);
+    fs.writeFileSync(path.join(hub,'TASKS.md'),'# TASKS\n## 2026-10-10 (土) 今日の作業\n### 今日やる\n- [ ] Same task <!-- mery-calendar:'+newId+' -->\n## 2026-10-08 (木) 今日の作業\n### 今日やる\n- [ ] Same task <!-- mery-calendar:'+oldId+' -->\n');
+    const store=new GoalCalDavStore(path.join(dir,'goals-caldav.sqlite'));
+    const old={id:oldId,type:'todo',source:'tasks',section:'今日やる',date:'2026-10-08',title:'Same task',done:false,due:'2026-10-08',parentId:''};
+    const href='/calendars/default/MeryTODO/'+encodeURIComponent(core.uidFor(oldId))+'.ics';
+    store.put(href,old,core.toIcs(old));
+    store.saveState({[oldId]:{local:sync.snapshot(old),remote:sync.snapshot(old),href}});
+    store.close();
+    const result=sync.run({hub,apply:true,today:'2026-10-10'});
+    assert.equal(result.errors.length,0);
+    assert.ok(result.operations.some(op=>op.id===oldId&&op.action==='deleteRemote'));
+    assert.ok(result.operations.some(op=>op.id===newId&&op.action==='push'));
+    assert.equal((fs.readFileSync(path.join(hub,'TASKS.md'),'utf8').match(/Same task/g)||[]).length,2);
+    const check=new GoalCalDavStore(path.join(dir,'goals-caldav.sqlite'));
+    assert.equal(check.byUid(core.uidFor(oldId)),null);
+    assert.ok(check.byUid(core.uidFor(newId)));
+    check.close();
+  }finally{
+    if(path.dirname(hub)===__dirname&&path.basename(hub).startsWith('.goal-link-test-'))fs.rmSync(hub,{recursive:true,force:true});
+  }
+});
