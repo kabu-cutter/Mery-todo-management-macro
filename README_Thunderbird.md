@@ -39,4 +39,5 @@ Google Tasks / Google Calendarとの同期は別の任意機能です。接続�
 - GOALS.mdでチェックを付けた行動ToDoは完了済みです。ThunderbirdのToDo欄で「完了したToDoを表示」を有効にすると確認できます。
 - GOALS.mdとTASKS.mdに同じ件名があるだけでは、別のToDoです。明示的にIDを対応付けた行だけは件名と完了状態が双方向に連動し、ThunderbirdではGOALS.md側の1件として表示されます。設定の考え方は [目標管理](README_目標管理.md) を参照してください。
 - 接続できない場合は、Meryの同期マクロを再実行してローカルサーバーを起動します。PCを再起動するとサーバーは自動起動しません。
+- 同期プレビューが終了コード1で止まった場合は、Meryが開く `MERYTODO_CALDAV_REPORT.md` の原因を確認します。TASKS.mdを数日分まとめて追加・移動・削除すると、隠して管理しているToDoのIDを安全に照合できず停止することがあります。`.mery-calendar\caldav-tasks-ids.json` を削除すると別のToDoとして再登録されるため、バックアップを保ったままIDを照合してください。
 - `GOALS.md` の参照番号と対応表に不整合がある場合は、同期前のバックアップを使って復旧します。IDを手作業で再発行するとThunderbird側で別項目になることがあります。

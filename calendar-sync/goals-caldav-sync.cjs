@@ -214,7 +214,7 @@ function reportText(operations,errors=[],applied=false){
   let text='# MeryTODO CalDAV '+(applied?'同期結果':'同期プレビュー')+'\n\n';
   for(const [action,label] of Object.entries(labels))text+='- '+label+': '+operations.filter(x=>x.action===action).length+'件\n';
   text+='\n';
-  for(const op of operations.filter(x=>x.action==='conflict'||x.action==='pull'||x.action==='push'||x.action==='merge')){
+  for(const op of operations.filter(x=>['conflict','pull','push','merge','deleteRemote','deleteLocal'].includes(x.action))){
     const item=op.local||op.remote||op.base?.local;
     text+='## '+labels[op.action]+'\n\n'+(item?.source==='tasks'?'TASKS.md':item?.source==='goals'?'GOALS.md':'')+' / '+(item?.type||'')+' / '+(item?.period||item?.due||'')+' / '+(item?.title||op.id)+'\n\n';
     if(op.action==='conflict'){
@@ -350,6 +350,13 @@ if(require.main===module){
     const result=run({hub:hubIndex>=0?args[hubIndex+1]:DEFAULT_HUB,apply:args.includes('--apply')});
     console.log(JSON.stringify({applied:result.applied,operations:result.operations.reduce((out,x)=>(out[x.action]=(out[x.action]||0)+1,out),{}),errors:result.errors.length,report:result.reportPath}));
     if(result.errors.length||result.operations.some(x=>x.action==='conflict'))process.exitCode=2;
-  }catch(error){console.error(error.stack||error.message);process.exitCode=1;}
+  }catch(error){
+    console.error(error.stack||error.message);
+    try{
+      const hub=path.resolve(hubIndex>=0?args[hubIndex+1]:DEFAULT_HUB);
+      writeAtomic(path.join(hub,'MERYTODO_CALDAV_REPORT.md'),'# MeryTODO CalDAV 同期エラー\n\n'+error.message+'\n');
+    }catch(reportError){console.error('同期エラーをレポートに記録できませんでした: '+reportError.message);}
+    process.exitCode=1;
+  }
 }
 module.exports={snapshot,normalizedRemote,parseTaskDocument,replaceItemLine,insertItem,reconcileGoalTaskLinks,applyRemote,reportText,run};
