@@ -27,6 +27,7 @@ var MENU_GOALS = 21;
 var MENU_BUTTON_GUIDE = 22;
 var MENU_FORMAT_MEMO_INDENT = 23;
 var MENU_THUNDERBIRD_CALENDAR = 24;
+var MENU_RESTORE_TASKS_GROUP_BACKUP = 25;
 
 var MACRO_OPEN_HUB = "Mery_作業ハブを開く.js";
 var MACRO_START_TEMPLATE = "Mery_今日の開始テンプレートを挿入.js";
@@ -45,6 +46,7 @@ var MACRO_GOOGLE_CALENDAR = "Mery_Googleカレンダーと同期.js";
 var MACRO_THUNDERBIRD_CALENDAR = "Mery_Thunderbirdと同期.js";
 var MACRO_GOALS = "Mery_目標管理.js";
 var MACRO_FORMAT_MEMO_INDENT = "Mery_TASKSメモ欄のインデントを整える.js";
+var MACRO_RESTORE_TASKS_GROUP_BACKUP = "Mery_TASKSグループ化バックアップから復旧.js";
 
 main();
 
@@ -66,6 +68,7 @@ function main() {
         menu.Add("TASKS.md今日分をGeminiで整理", MENU_GEMINI_TASKS_TODAY);
         menu.Add("今日やる優先度をGeminiで整理", MENU_GEMINI_PRIORITY_TODAY);
         menu.Add("今日やるをGeminiでグループ分け・反映", MENU_GEMINI_GROUP_TODAY);
+        menu.Add("TASKS.mdをグループ化バックアップから復旧…", MENU_RESTORE_TASKS_GROUP_BACKUP);
         menu.Add("今日やるをランダムに並べ替える", MENU_RANDOM_TODAY);
         menu.Add("", 0, meMenuSeparator);
         menu.Add("選択範囲を今日のTASKS欄へ追加", MENU_INSERT_TASKS_SECTION);
@@ -113,6 +116,7 @@ function main() {
         if (selected === MENU_ADD_ASSET) return runMacro("Mery_資料を追加.js");
         if (selected === MENU_OPEN_ASSET) return runMacro("Mery_資料を開く.js");
         if (selected === MENU_GEMINI_GROUP_TODAY) return runMacro(MACRO_GEMINI_GROUP_TODAY);
+        if (selected === MENU_RESTORE_TASKS_GROUP_BACKUP) return runMacro(MACRO_RESTORE_TASKS_GROUP_BACKUP);
         if (selected === MENU_THUNDERBIRD_CALENDAR) return runMacro(MACRO_THUNDERBIRD_CALENDAR);
         if (selected === MENU_GOOGLE_CALENDAR) return runMacro(MACRO_GOOGLE_CALENDAR);
         if (selected === MENU_BUTTON_GUIDE) return showMacroButtonGuide();

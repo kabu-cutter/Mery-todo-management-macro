@@ -214,7 +214,11 @@ function toIcs(item, stamp = new Date().toISOString()) {
     if (item.done) lines.push('COMPLETED:' + stamp.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z'));
   }
   if(type==='VEVENT')lines.push('X-MERY-DONE:'+(item.done?'TRUE':'FALSE'));
-  lines.push('SUMMARY:' + escapeText(item.title), 'CATEGORIES:' + escapeText(item.type));
+  lines.push('SUMMARY:' + escapeText(item.title));
+  if(type==='VTODO'){
+    if(item.category)lines.push('CATEGORIES:'+escapeText(item.category));
+    else if(item.source!=='tasks')lines.push('CATEGORIES:'+escapeText(item.type));
+  }else lines.push('CATEGORIES:'+escapeText(item.type));
   if (item.parentId) lines.push('RELATED-TO;RELTYPE=PARENT:' + uidFor(item.parentId));
   if ((item.type === 'todo' || item.type === 'task') && item.due) lines.push('X-MERY-DUE:' + item.due);
   lines.push('END:' + type);
@@ -261,7 +265,8 @@ function readIcsItem(component) {
   const type = typeProperty || (component.type === 'todo' ? 'todo' : (prop(component, 'CATEGORIES')?.value || 'year'));
   const summary = prop(component, 'SUMMARY');
   if (!summary) throw new Error('ICSに件名がありません: ' + uid);
-  const item = {id, uid: uid || uidFor(id), type, source:prop(component,'X-MERY-SOURCE')?.value||'tasks',section:unescapeText(prop(component,'X-MERY-SECTION')?.value||''),title: unescapeText(summary.value), done: prop(component,'STATUS')?.value?.toUpperCase() === 'COMPLETED' || prop(component,'PERCENT-COMPLETE')?.value === '100' || prop(component,'X-MERY-DONE')?.value?.toUpperCase()==='TRUE', parentId: '', due: '', time: '', start: '', end: ''};
+  const category=component.type==='todo'?prop(component,'CATEGORIES'):null;
+  const item = {id, uid: uid || uidFor(id), type, source:prop(component,'X-MERY-SOURCE')?.value||'tasks',section:unescapeText(prop(component,'X-MERY-SECTION')?.value||''),category:category?unescapeText(category.value):'',title: unescapeText(summary.value), done: prop(component,'STATUS')?.value?.toUpperCase() === 'COMPLETED' || prop(component,'PERCENT-COMPLETE')?.value === '100' || prop(component,'X-MERY-DONE')?.value?.toUpperCase()==='TRUE', parentId: '', due: '', time: '', start: '', end: ''};
   const parentUid = p['RELATED-TO']?.find(x => /RELTYPE=PARENT/i.test(x.params))?.value;
   if (parentUid) item.parentId = parentUid.replace(/@local\.merytodo$/i, '');
   if (type === 'todo' || type === 'task') {
@@ -282,7 +287,7 @@ function readIcsItem(component) {
 }
 
 function equal(a, b) {
-  const pick = x => ({id:x.id,type:x.type,source:x.source||'goals',section:x.section||'',date:x.date||'',title:x.title,done:!!x.done,start:x.start||'',end:x.end||'',due:x.due||'',time:x.time||'',parentId:x.parentId||''});
+  const pick = x => ({id:x.id,type:x.type,source:x.source||'goals',section:x.section||'',category:x.category||'',date:x.date||'',title:x.title,done:!!x.done,start:x.start||'',end:x.end||'',due:x.due||'',time:x.time||'',parentId:x.parentId||''});
   return JSON.stringify(pick(a)) === JSON.stringify(pick(b));
 }
 function planSync(localItems, remoteItems, entries = {}) {
@@ -298,7 +303,7 @@ function planSync(localItems, remoteItems, entries = {}) {
     else {
       const lc=!equal(l,base.local), rc=!equal(r,base.remote);
       if(lc&&rc){
-        const fields=['type','source','section','date','title','done','period','start','end','due','time','parentId'],merged={...l},conflicts=[];
+        const fields=['type','source','section','category','date','title','done','period','start','end','due','time','parentId'],merged={...l},conflicts=[];
         for(const field of fields){
           const localChanged=(l[field]??'')!==(base.local[field]??''),remoteChanged=(r[field]??'')!==(base.remote[field]??'');
           if(localChanged&&remoteChanged&&(l[field]??'')!==(r[field]??''))conflicts.push(field);

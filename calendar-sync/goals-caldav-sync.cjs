@@ -8,10 +8,10 @@ const taskIdentities=require('./task-identities.cjs');
 const core=require('./goals-caldav-core.cjs');
 
 const DEFAULT_HUB='C:\\Projects\\ai-work-hub';
-function snapshot(item){return {id:item.id,type:item.type,source:item.source||'goals',section:item.section||'',date:item.date||'',title:item.title,done:!!item.done,period:item.period||'',start:item.start||'',end:item.end||'',due:item.due||'',time:item.time||'',parentId:item.parentId||''};}
+function snapshot(item){return {id:item.id,type:item.type,source:item.source||'goals',section:item.section||'',category:item.category||'',date:item.date||'',title:item.title,done:!!item.done,period:item.period||'',start:item.start||'',end:item.end||'',due:item.due||'',time:item.time||'',parentId:item.parentId||''};}
 function normalizedRemote(item,localOrBase){
   const result={...item};
-  if(localOrBase){result.type=localOrBase.type;result.source=localOrBase.source||'goals';if(!result.section)result.section=localOrBase.section||'';}
+  if(localOrBase){result.type=localOrBase.type;result.source=localOrBase.source||'goals';if(!result.section)result.section=localOrBase.section||'';result.category=localOrBase.category||'';}
   if(result.type==='year'){
     const match=/^(\d{4})-01-01$/.exec(result.start||'');
     if(!match||result.end!==(Number(match[1])+1)+'-01-01')throw new Error('年間目標の期間は1月1日から翌年1月1日までにしてください。');
@@ -41,7 +41,58 @@ function parseTaskDocument(input,snapshots=[],options={}){
   let counter=0;
   const makeId=options.apply?taskCore.uuid:()=>crypto.createHash('sha256').update(options.file+'\0'+input+'\0'+(++counter)).digest('hex').slice(0,32);
   const marked=taskIdentities.restore(input,snapshots,makeId),parsed=taskCore.parseDocument(marked,'TASKS',makeId);
-  return {text:parsed.text,items:parsed.items.map(item=>({id:item.id,type:'todo',source:'tasks',section:item.section,date:item.date,title:item.text,done:item.done,period:'',start:'',end:'',due:item.date||'',time:item.start&&item.end?item.start+'-'+item.end:'',parentId:'',index:item.index,taskKind:'TASKS',taskStart:item.start,taskEnd:item.end}))};
+  let section='',category='';const categories=new Map();
+  for(const [index,line] of parsed.text.split('\n').entries()){
+    if(/^##\s/.test(line)){section='';category='';continue;}
+    const sub=line.match(/^###\s+(.+?)\s*$/);
+    if(sub){section=sub[1];category='';continue;}
+    const tag=line.match(/^####(?!#)\s*(.+?)\s*$/);
+    if(tag){category=tag[1].trim();continue;}
+    if(/^#{1,2}\s/.test(line)){category='';continue;}
+    if(section&&/^[-*]\s+\[[ xX]\]/.test(line))categories.set(index,category);
+  }
+  return {text:parsed.text,items:parsed.items.map(item=>({id:item.id,type:'todo',source:'tasks',section:item.section,category:categories.get(item.index)||'',date:item.date,title:item.text,done:item.done,period:'',start:'',end:'',due:item.date||'',time:item.start&&item.end?item.start+'-'+item.end:'',parentId:'',index:item.index,taskKind:'TASKS',taskStart:item.start,taskEnd:item.end}))};
+}
+function attachLinkedTaskCategories(goalItems,taskItems,links){
+  const tasks=new Map(taskItems.map(item=>[item.id,item]));
+  for(const link of links){const goal=goalItems.find(item=>item.id===link.goalId),task=tasks.get(link.taskId);if(goal&&task)goal.category=task.category||'';}
+  return goalItems;
+}
+function taskCategoryAt(lines,index){
+  let category='';
+  for(let i=0;i<=index&&i<lines.length;i++){
+    if(/^##\s/.test(lines[i])||/^###\s/.test(lines[i]))category='';
+    else {const tag=lines[i].match(/^####(?!#)\s*(.*?)\s*$/);if(tag)category=tag[1].trim();}
+  }
+  return category;
+}
+function insertTaskCategoryBlock(lines,date,section,category,block){
+  if(!category){
+    const marker=block[0].match(taskCore.MARKER)?.[1];
+    const index=lines.findIndex(line=>line.match(taskCore.MARKER)?.[1]===marker);
+    if(index<0)throw new Error('移動したTASKS.md項目を確認できません。');
+    lines.splice(index,0,...block);return lines;
+  }
+  const day=lines.findIndex(line=>new RegExp('^##\\s+'+date+'(?:\\s|$)').test(line));
+  if(day<0)throw new Error('カテゴリ反映先の日付がTASKS.mdにありません: '+date);
+  let dayEnd=lines.findIndex((line,index)=>index>day&&/^##\s/.test(line));if(dayEnd<0)dayEnd=lines.length;
+  const sectionIndex=lines.findIndex((line,index)=>index>day&&index<dayEnd&&line.trim()==='### '+section);
+  if(sectionIndex<0)throw new Error('カテゴリ反映先の欄がTASKS.mdにありません: '+section);
+  let sectionEnd=lines.findIndex((line,index)=>index>sectionIndex&&index<dayEnd&&(/^###\s/.test(line)||/^---+\s*$/.test(line)));if(sectionEnd<0)sectionEnd=dayEnd;
+  let categoryIndex=-1;
+  for(let i=sectionIndex+1;i<sectionEnd;i++){
+    const tag=lines[i].match(/^####(?!#)\s*(.*?)\s*$/);
+    if(tag&&tag[1].trim()===category){categoryIndex=i;break;}
+  }
+  if(categoryIndex>=0){
+    let end=lines.findIndex((line,index)=>index>categoryIndex&&index<sectionEnd&&(/^####(?!#)/.test(line)||/^###\s/.test(line)||/^---+\s*$/.test(line)));if(end<0)end=sectionEnd;
+    while(end>categoryIndex+1&&!lines[end-1].trim())end--;
+    lines.splice(end,0,...block);
+  }else{
+    let end=sectionEnd;while(end>sectionIndex+1&&!lines[end-1].trim())end--;
+    lines.splice(end,0,'','#### '+category,...block,'');
+  }
+  return lines;
 }
 function replaceItemLine(lines,item,remote){
   const body=remote.type==='year'?remote.period+'年 '+remote.title:
@@ -101,6 +152,7 @@ function hasTaskDetails(lines,index){
 function replaceTaskFromThunderbird(lines,id,remote,today){
   const current=taskCore.parseDocument(lines.join('\n'),'TASKS').items.find(x=>x.id===id);
   if(!current)throw new Error('TASKS.mdの同期対象行を特定できません: '+id);
+  const currentCategory=taskCategoryAt(lines,current.index);
   const date=remote.due||today,section=remote.section||current.section;
   if(date!==current.date||section!==current.section){
     let end=current.index+1;
@@ -112,6 +164,7 @@ function replaceTaskFromThunderbird(lines,id,remote,today){
     const newIndex=moved.findIndex(line=>line.match(taskCore.MARKER)?.[1]===id);
     if(newIndex<0)throw new Error('移動後のTASKS.md行を確認できません: '+id);
     moved.splice(newIndex+1,0,...attached);
+    if(currentCategory){const block=moved.splice(newIndex,1+attached.length);insertTaskCategoryBlock(moved,date,section,currentCategory,block);}
     return moved;
   }
   const prefix=lines[current.index].match(/^([-*]\s+)\[[ xX]\]\s*/);
@@ -214,6 +267,7 @@ function applyRemote(goalItems,goalText,taskItems,taskText,operations,today=new 
     const date=item.due||today;
     const update={id:item.id,kind:'TASKS',date,section:item.section||'今日やる',text:item.title,done:!!item.done,start:item.time?.split('-')[0]||'',end:item.time?.split('-')[1]||''};
     updatedTasks=taskCore.applyItems({TASKS:updatedTasks,LOG:''},[update],[]).TASKS;
+    if(item.category){const lines=updatedTasks.split('\n'),index=lines.findIndex(line=>line.match(taskCore.MARKER)?.[1]===item.id);if(index<0)throw new Error('新しいThunderbird ToDoをTASKS.mdで確認できません: '+item.title);const block=lines.splice(index,1);insertTaskCategoryBlock(lines,date,update.section,item.category,block);updatedTasks=lines.join('\n');}
   }
   return {goals:updatedGoals,tasks:updatedTasks};
 }
@@ -262,6 +316,7 @@ function run(options={}){
   catch(error){writeAtomic(reportPath,reportText([],[error.message],false));return {operations:[],errors:[error.message],reportPath,goalFile,assignedIds,applied:false};}
   parsed=core.parseGoals(linked.goals,{assignIds:false});
   taskParsed=parseTaskDocument(linked.tasks,[],{apply:!!options.apply,file:tasksFile});
+  attachLinkedTaskCategories(parsed.items,taskParsed.items,links);
   const linkedTaskIds=new Set(links.map(link=>link.taskId));
   const store=new GoalCalDavStore(path.join(dir,'goals-caldav.sqlite'));
   try{
@@ -318,8 +373,9 @@ function run(options={}){
       taskIdentitySnapshots=taskIdentities.checkpoint(taskIdentityFile,finalTasks,taskIdentitySnapshots);
       const visibleTasks=taskIdentities.strip(finalTasks);
       if(visibleTasks!==taskSource)backupAndWrite(tasksFile,taskOriginal,visibleTasks);
-      const refreshed=core.parseGoals(finalText,{assignIds:true});
       const refreshedTasks=parseTaskDocument(finalTasks,[],{apply:true,file:tasksFile});
+      const refreshed=core.parseGoals(finalText,{assignIds:true});
+      attachLinkedTaskCategories(refreshed.items,refreshedTasks.items,links);
       const current=new Map([...refreshed.items.map(item=>[item.id,snapshot(item)]),...refreshedTasks.items.map(item=>[item.id,snapshot(item)])]);
       const nextState=Object.create(null);
       for(const op of operations){
