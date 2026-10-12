@@ -29,6 +29,44 @@ test('later TASKS edits propagate back to GOALS, and simultaneous divergent edit
   assert.throws(()=>sync.reconcileGoalTaskLinks(first.goals.replace('Updated action','Edited in GOALS'),edited,first.links,'2026-10-08'),/別々に変更/);
 });
 
+test('a uniquely identifiable linked GOALS row is reattached when its ID changed',()=>{
+  const replacementId='e'.repeat(32);
+  const changed=goals.replace('<!--g:4-->','<!--g:4-->').replace('4='+goalId,'4='+replacementId);
+  const result=sync.reconcileGoalTaskLinks(changed,tasks,[{...linked[0],base:{title:'Updated action',done:true}}],'2026-10-08');
+  assert.equal(result.links[0].goalId,replacementId);
+  assert.ok(result.changes.some(change=>change.includes('連動IDを復旧')));
+  assert.equal(result.warnings.length,0);
+});
+
+test('an unrecoverable linked ID is released without blocking period goal sync',()=>{
+  const hub=fs.mkdtempSync(path.join(__dirname,'.goal-link-test-'));
+  try{
+    const dir=path.join(hub,'.mery-calendar');fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(hub,'GOALS.md'),goals);
+    fs.writeFileSync(path.join(hub,'TASKS.md'),tasks);
+    fs.writeFileSync(path.join(dir,'goals-task-links.json'),JSON.stringify({version:1,links:linked}));
+    const first=sync.run({hub,apply:true,today:'2026-10-08'});
+    assert.equal(first.errors.length,0);
+    const newGoalId='f'.repeat(32);
+    const editedGoals=fs.readFileSync(path.join(hub,'GOALS.md'),'utf8')
+      .replace('2026-10 Month','2026-10 Corrected month')
+      .replace('Updated action','Renamed linked action')
+      .replace('4='+goalId,'4='+newGoalId);
+    fs.writeFileSync(path.join(hub,'GOALS.md'),editedGoals);
+    const result=sync.run({hub,apply:true,today:'2026-10-08'});
+    assert.equal(result.errors.length,0);
+    assert.ok(result.operations.some(op=>op.id==='22222222222222222222222222222222'&&op.action==='push'));
+    assert.match(fs.readFileSync(result.reportPath,'utf8'),/一意に復旧できないため、この連動を解除しました/);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir,'goals-task-links.json'),'utf8')).links,[]);
+    const check=new GoalCalDavStore(path.join(dir,'goals-caldav.sqlite'));
+    const period=core.parseIcs(check.byUid(core.uidFor('22222222222222222222222222222222')).ical)[0];
+    assert.equal(period.title,'Corrected month');
+    check.close();
+  }finally{
+    if(path.dirname(hub)===__dirname&&path.basename(hub).startsWith('.goal-link-test-'))fs.rmSync(hub,{recursive:true,force:true});
+  }
+});
+
 test('linked TASKS item retires its separate CalDAV ToDo while keeping both local lines',()=>{
   const hub=fs.mkdtempSync(path.join(__dirname,'.goal-link-test-'));
   try{

@@ -233,10 +233,25 @@ function loadGoalTaskLinks(file){
 function reconcileGoalTaskLinks(goalText,taskText,links,today){
   const goals=core.parseGoals(goalText,{assignIds:false}),tasks=taskCore.parseDocument(taskText,'TASKS');
   const goalLines=goals.text.split('\n');let taskLines=tasks.text.split('\n');
-  const next=[],changes=[];
-  for(const link of links){
-    const goal=goals.items.find(x=>x.id===link.goalId),task=tasks.items.find(x=>x.id===link.taskId);
-    if(!goal||goal.type!=='todo'||!task)throw new Error('連動対象のGOALS.mdまたはTASKS.mdの行が見つかりません。IDを確認してください。');
+  const next=[],changes=[],warnings=[];
+  for(const originalLink of links){
+    const link={...originalLink};
+    let goal=goals.items.find(x=>x.id===link.goalId),task=tasks.items.find(x=>x.id===link.taskId);
+    // A deleted/replaced marker should not prevent unrelated period goals from syncing.
+    // Reattach only when the prior title and completion state identify one unique row.
+    if(!goal||goal.type!=='todo'){
+      const candidates=goals.items.filter(x=>x.type==='todo'&&x.title===link.base?.title&&x.done===link.base?.done);
+      if(candidates.length===1){goal=candidates[0];link.goalId=goal.id;changes.push('GOALS.mdの連動IDを復旧: '+goal.title);}
+    }
+    if(!task){
+      const candidates=tasks.items.filter(x=>x.text===link.base?.title&&x.done===link.base?.done);
+      if(candidates.length===1){task=candidates[0];link.taskId=task.id;changes.push('TASKS.mdの連動IDを復旧: '+task.text);}
+    }
+    if(!goal||goal.type!=='todo'||!task){
+      const missing=[!goal||goal.type!=='todo'?'GOALS.md':'',!task?'TASKS.md':''].filter(Boolean).join(' / ');
+      warnings.push(missing+'の連動行を一意に復旧できないため、この連動を解除しました（'+link.base?.title+'）。既存行は個別に保持します。');
+      continue;
+    }
     const g={title:goal.title,done:goal.done},t={title:task.text,done:task.done};
     const gc=!link.base||JSON.stringify(g)!==JSON.stringify(link.base);
     const tc=!link.base||JSON.stringify(t)!==JSON.stringify(link.base);
@@ -253,7 +268,7 @@ function reconcileGoalTaskLinks(goalText,taskText,links,today){
     }
     next.push({goalId:link.goalId,taskId:link.taskId,base:selected});
   }
-  return {goals:core.compactGoalIds(goalLines.join('\n')),tasks:taskLines.join('\n'),links:next,changes};
+  return {goals:core.compactGoalIds(goalLines.join('\n')),tasks:taskLines.join('\n'),links:next,changes,warnings};
 }
 function saveGoalTaskLinks(file,links){
   const temp=file+'.'+crypto.randomBytes(6).toString('hex')+'.tmp';
@@ -316,7 +331,7 @@ function applyRemote(goalItems,goalText,taskItems,taskText,operations,today=new 
   }
   return {goals:updatedGoals,tasks:updatedTasks};
 }
-function reportText(operations,errors=[],applied=false,timeNotes=[]){
+function reportText(operations,errors=[],applied=false,timeNotes=[],warnings=[]){
   const labels={push:'MeryTODOからCalDAVへ反映',pull:'CalDAVからGOALS.mdへ反映',merge:'別項目の変更をマージ',adopt:'変更なし',conflict:'競合・確認が必要',deleteRemote:'CalDAV項目を削除',deleteLocal:'GOALS.md項目を削除',forget:'同期情報を整理'};
   let text='# MeryTODO CalDAV '+(applied?'同期結果':'同期プレビュー')+'\n\n';
   for(const [action,label] of Object.entries(labels))text+='- '+label+': '+operations.filter(x=>x.action===action).length+'件\n';
@@ -331,6 +346,7 @@ function reportText(operations,errors=[],applied=false,timeNotes=[]){
     }
   }
   if(timeNotes.length)text+='## 時刻記録メモ\n\n'+timeNotes.map(note=>'- '+note).join('\n')+'\n\n';
+  if(warnings.length)text+='## 連動IDの確認\n\n'+warnings.map(note=>'- '+note).join('\n')+'\n\n';
   for(const error of errors)text+='## 要確認\n\n'+error+'\n\n';
   return text;
 }
@@ -362,8 +378,8 @@ function run(options={}){
   catch(error){writeAtomic(reportPath,reportText([],[error.message],false));return {operations:[],errors:[error.message],reportPath,goalFile,assignedIds,applied:false};}
   parsed=core.parseGoals(linked.goals,{assignIds:false});
   taskParsed=parseTaskDocument(linked.tasks,[],{apply:!!options.apply,file:tasksFile});
-  attachLinkedTaskCategories(parsed.items,taskParsed.items,links);
-  const linkedTaskIds=new Set(links.map(link=>link.taskId));
+  attachLinkedTaskCategories(parsed.items,taskParsed.items,linked.links);
+  const linkedTaskIds=new Set(linked.links.map(link=>link.taskId));
   const store=new GoalCalDavStore(path.join(dir,'goals-caldav.sqlite'));
   try{
     const entries=store.state(),resources=store.resources(),remote=[];
@@ -419,19 +435,19 @@ function run(options={}){
       writeAtomic(reportPath,reportText(operations,errors,false));
       return {operations,errors,reportPath,goalFile,assignedIds,applied:false};
     }
-    let finalText=parsed.text,finalTasks=taskParsed.text,linkChanges=[...linked.changes];
+    let finalText=parsed.text,finalTasks=taskParsed.text,linkChanges=[...linked.changes],linkWarnings=[...linked.warnings];
     if(options.apply){
       const actionable=operations.filter(x=>x.action!=='conflict');
       const applied=applyRemote(parsed.items,parsed.text,taskItems,taskParsed.text,actionable,today);
-      const relinked=reconcileGoalTaskLinks(applied.goals,applied.tasks,links,today);
-      finalText=relinked.goals;finalTasks=relinked.tasks;linkChanges.push(...relinked.changes);
+      const relinked=reconcileGoalTaskLinks(applied.goals,applied.tasks,linked.links,today);
+      finalText=relinked.goals;finalTasks=relinked.tasks;linkChanges.push(...relinked.changes);linkWarnings.push(...relinked.warnings);
       if(finalText!==source)backupAndWrite(goalFile,original,finalText);
       taskIdentitySnapshots=taskIdentities.checkpoint(taskIdentityFile,finalTasks,taskIdentitySnapshots);
       const visibleTasks=taskIdentities.strip(finalTasks);
       if(visibleTasks!==taskSource)backupAndWrite(tasksFile,taskOriginal,visibleTasks);
       const refreshedTasks=parseTaskDocument(finalTasks,[],{apply:true,file:tasksFile});
       const refreshed=core.parseGoals(finalText,{assignIds:true});
-      attachLinkedTaskCategories(refreshed.items,refreshedTasks.items,links);
+      attachLinkedTaskCategories(refreshed.items,refreshedTasks.items,relinked.links);
       const current=new Map([...refreshed.items.map(item=>[item.id,snapshot(item)]),...refreshedTasks.items.map(item=>[item.id,snapshot(item)])]);
       const nextState=Object.create(null);
       for(const op of operations){
@@ -455,9 +471,9 @@ function run(options={}){
         if(localItem&&remoteItem)nextState[op.id]={local:snapshot(localItem),remote:snapshot(normalizedRemote(remoteItem,localItem)),href};
       }
       store.saveState(nextState);
-      if(links.length)saveGoalTaskLinks(linksFile,relinked.links);
+      if(links.length||relinked.links.length)saveGoalTaskLinks(linksFile,relinked.links);
     }
-    let report=reportText(operations,errors,!!options.apply);
+    let report=reportText(operations,errors,!!options.apply,[],linkWarnings);
     if(linkChanges.length)report+='## GOALS.md / TASKS.md の連動\n\n'+[...new Set(linkChanges)].map(x=>'- '+x).join('\n')+'\n';
     writeAtomic(reportPath,report);
     return {operations,errors,reportPath,goalFile,assignedIds,applied:!!options.apply};
