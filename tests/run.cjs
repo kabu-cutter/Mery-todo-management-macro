@@ -41,6 +41,27 @@ async function main() {
     const full = c.insertTemplate(prior + '\n[img-2]: img/note.pdf\n', template);
     assert.ok(full.includes('[PDF: ノート][img-2]') && full.includes('[img-2]: img/note.pdf'));
   });
+  await test('today template keeps the latest duplicate TODO with its added body and memo', () => {
+    const c = load('Mery_今日の開始テンプレートを挿入.js');
+    const prior = '# TASKS\n## 2026-10-16 (金) 今日の作業\n### 今日やる\n'
+      + '- [ ] 同じ見出し\n  - 古い補足\n'
+      + '- [ ] 同じ見出し：本文に追記した内容\n  - 新しい資料リンク [資料](new.md)\n';
+    const copied = c.copyPreviousDayTasks(prior, '2026-10-17 (土)');
+    const template = c.buildStartTemplate('2026-10-17 (土)', copied);
+    assert.equal(copied.count, 1);
+    assert.ok(template.includes('同じ見出し：本文に追記した内容'));
+    assert.ok(template.includes('- 新しい資料リンク [資料](new.md)'));
+    assert.ok(!template.includes('古い補足'));
+  });
+  await test('a latest completed duplicate suppresses an earlier open TODO', () => {
+    const c = load('Mery_今日の開始テンプレートを挿入.js');
+    const prior = '# TASKS\n## 2026-10-16 (金) 今日の作業\n### 今日やる\n'
+      + '- [ ] 同じTODO\n  - 古いメモ\n'
+      + '- [x] 同じTODO\n  - 完了時のメモ\n';
+    const copied = c.copyPreviousDayTasks(prior, '2026-10-17 (土)');
+    assert.equal(copied.count, 0);
+    assert.ok(!c.buildStartTemplate('2026-10-17 (土)', copied).includes('同じTODO'));
+  });
   for (const [name, fn] of [['Mery_TASKS今日分の重複項目を整理.js','normalizeTodayTasks'], ['Mery_選択範囲を今日のTASKS欄へ追加.js','normalizeTodayTasksText']]) {
     await test(name + ': preserve other dates between duplicates', () => {
       const c = load(name);

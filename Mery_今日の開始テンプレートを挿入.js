@@ -105,19 +105,20 @@ function copyPreviousDayTasks(text, today) {
     var count = 0;
     var pending = [];
     var pendingDone = false;
+    var records = [];
 
     function flushTask() {
         if (!pending.length) return;
         while (pending.length && !pending[pending.length - 1].trim()) pending.pop();
-        if (!pendingDone && pending.length) {
-            if (!sections[currentSection]) sections[currentSection] = "";
-            var output = sections[currentSection];
-            if (currentCategory && output.indexOf("#### " + currentCategory + "\n") < 0) {
-                output += "#### " + currentCategory + "\n";
-            }
-            output += pending.join("\n") + "\n";
-            sections[currentSection] = output;
-            count++;
+        if (pending.length) {
+            records.push({
+                section: currentSection,
+                category: currentCategory,
+                done: pendingDone,
+                lines: pending.slice(),
+                key: taskHeadingKey(pending[0]),
+                order: records.length
+            });
         }
         pending = [];
     }
@@ -135,18 +136,38 @@ function copyPreviousDayTasks(text, today) {
         if (/^[-*]\s+\[[ xX]\]/.test(line)) {
             flushTask();
             pendingDone = /^[-*]\s+\[[xX]\]/.test(line);
-            if (!pendingDone) {
-                var cleaned = line.replace(/^([-*]\s+)\[[ xX]\]\s*/, "$1[ ] ");
-                cleaned = cleaned.replace(/\s*<!--\s*mery-calendar:[a-f0-9]+\s*-->/ig, "")
-                    .replace(/\s+\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+[AP]M(?:\s*[-–—]\s*\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+[AP]M)?(?=\s*(?:<!--\s*mery-due:[^>]*-->\s*)?$)/i, "")
-                    .replace(/\s+@(?:[01]\d|2[0-3]):[0-5]\d(?:-(?:[01]\d|2[0-3]):[0-5]\d)?\s*$/, "");
-                pending.push(cleaned);
-            }
+            pending.push(cleanTaskForCopy(line));
             continue;
         }
         if (pending.length) pending.push(line);
     }
     flushTask();
+
+    // 同じTODO名の追記版は最新の一式（メモ・資料行を含む）を採用する。
+    // 最新行が完了済みなら、古い未完了行を今日へ復活させない。
+    var latestRecords = [];
+    for (var recordIndex = 0; recordIndex < records.length; recordIndex++) {
+        var record = records[recordIndex];
+        var matches = [];
+        for (var priorIndex = 0; priorIndex < latestRecords.length; priorIndex++) {
+            if (sameTaskHeading(latestRecords[priorIndex].key, record.key)) matches.push(priorIndex);
+        }
+        if (matches.length === 1) latestRecords[matches[0]] = record;
+        else latestRecords.push(record);
+    }
+    latestRecords.sort(function (a, b) { return a.order - b.order; });
+    for (var latestIndex = 0; latestIndex < latestRecords.length; latestIndex++) {
+        var latest = latestRecords[latestIndex];
+        if (latest.done) continue;
+        if (!sections[latest.section]) sections[latest.section] = "";
+        var output = sections[latest.section];
+        if (latest.category && output.indexOf("#### " + latest.category + "\n") < 0) {
+            output += "#### " + latest.category + "\n";
+        }
+        output += latest.lines.join("\n") + "\n";
+        sections[latest.section] = output;
+        count++;
+    }
 
     // Section with no source tasks remains a normal empty slot in today's template.
     for (var name in sections) {
@@ -163,6 +184,35 @@ function copyPreviousDayTasks(text, today) {
         }
     }
     return { sections: sections, extraSections: extraSections, sourceDate: sourceDate, count: count };
+}
+
+function cleanTaskForCopy(line) {
+    var cleaned = line.replace(/^([-*]\s+)\[[ xX]\]\s*/, "$1[ ] ");
+    return cleaned.replace(/\s*<!--\s*mery-calendar:[a-f0-9]+\s*-->/ig, "")
+        .replace(/\s+\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+[AP]M(?:\s*[-–—]\s*\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+[AP]M)?(?=\s*(?:<!--\s*mery-due:[^>]*-->\s*)?$)/i, "")
+        .replace(/\s+@(?:[01]\d|2[0-3]):[0-5]\d(?:-(?:[01]\d|2[0-3]):[0-5]\d)?\s*$/, "");
+}
+
+function taskHeadingKey(line) {
+    return String(line || "").replace(/^[-*]\s+\[[ xX]\]\s*/, "")
+        .replace(/\s*<!--\s*mery-calendar:[a-f0-9]+\s*-->/ig, "")
+        .replace(/\s*<!--\s*mery-due:[^>]*-->\s*/ig, " ")
+        .replace(/\s+\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+[AP]M(?:\s*[-–—]\s*\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+[AP]M)?\s*$/i, "")
+        .replace(/\s+@(?:[01]\d|2[0-3]):[0-5]\d(?:-(?:[01]\d|2[0-3]):[0-5]\d)?\s*$/, "")
+        .normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function sameTaskHeading(left, right) {
+    if (!left || !right) return false;
+    if (left === right) return true;
+    var a = Array.from(left), b = Array.from(right);
+    function extension(shortText, longChars) {
+        var shortChars = Array.from(shortText);
+        if (shortChars.length < 4 || shortChars.length >= longChars.length) return false;
+        for (var i = 0; i < shortChars.length; i++) if (shortChars[i] !== longChars[i]) return false;
+        return /^[\s、，。:：;；\-–—([{【「『]/.test(longChars[shortChars.length]);
+    }
+    return extension(left, b) || extension(right, a);
 }
 
 function insertTemplate(currentText, template) {
