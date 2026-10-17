@@ -41,16 +41,48 @@ function pairEdited(old,fresh,ids,textOf,options={}){
 }
 function restore(text,snapshots,makeId=core.uuid){
   const parsed=core.parseDocument(text,'TASKS',makeId);if(!snapshots.length)return parsed.text;
+  const categoryMap=(source,items)=>{
+    const lines=source.replace(/\r\n?/g,'\n').split('\n'),result=new Map();
+    for(const item of items){
+      let category='';
+      for(let i=item.index-1;i>=0;i--){
+        if(/^###\s/.test(lines[i]))break;
+        const match=lines[i].match(/^####(?!#)\s+(.+?)\s*$/);if(match){category=match[1];break;}
+      }
+      result.set(item.index,category);
+    }
+    return result;
+  };
+  const freshCategories=categoryMap(text,parsed.items);for(const item of parsed.items)item.category=freshCategories.get(item.index)||'';
   const explicit=new Set(text.match(/<!-- mery-calendar:([a-f0-9]{32}) -->/g)?.map(x=>x.match(/[a-f0-9]{32}/)[0])||[]);
   const context=x=>x.date+'\0'+x.section;
   const identityText=x=>x.text.replace(/\s+\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+[AP]M(?:\s+[-–—]\s+\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+[AP]M)?$/i,'').trim();
   const key=x=>context(x)+'\0'+identityText(x);
   const newKeys=new Set(parsed.items.map(key));
-  const candidates=snapshots.map(s=>({text:s,items:core.parseDocument(s,'TASKS',makeId).items}));
+  const candidates=snapshots.map(s=>{const items=core.parseDocument(s,'TASKS',makeId).items,categories=categoryMap(s,items);for(const item of items)item.category=categories.get(item.index)||'';return {text:s,items};});
   const chosen=candidates.find(x=>strip(x.text)===strip(text))||candidates.sort((a,b)=>b.items.filter(x=>newKeys.has(key(x))).length-a.items.filter(x=>newKeys.has(key(x))).length)[0];
   let old=chosen.items.filter(x=>!explicit.has(x.id)),fresh=parsed.items.filter(x=>!explicit.has(x.id));const ids=new Map(),anchoredContexts=new Set();
   function match(group,duplicates){
-    for(const k of new Set(fresh.map(group))){const a=old.filter(x=>group(x)===k),b=fresh.filter(x=>group(x)===k);if(!a.length)continue;if(a.length===1&&b.length===1||duplicates&&a.length===b.length){for(let i=0;i<a.length;i++){ids.set(b[i].index,a[i].id);anchoredContexts.add(context(a[i]));anchoredContexts.add(context(b[i]));}old=old.filter(x=>!a.includes(x));fresh=fresh.filter(x=>!b.includes(x));}else if(duplicates)throw Error('同名の重複項目のIDを特定できません。削除前の状態に戻して項目名を区別してから同期してください。');}
+    for(const k of new Set(fresh.map(group))){
+      const a=old.filter(x=>group(x)===k),b=fresh.filter(x=>group(x)===k);if(!a.length)continue;
+      const pairedOld=[],pairedFresh=[];
+      const bind=(left,right)=>{ids.set(right.index,left.id);pairedOld.push(left);pairedFresh.push(right);anchoredContexts.add(context(left));anchoredContexts.add(context(right));};
+      if(a.length===1&&b.length===1)bind(a[0],b[0]);
+      else if(duplicates){
+        // Exact same-name rows may legitimately be copied into a new category.
+        // Preserve IDs in the same fourth-level category first, then pair any
+        // indistinguishable remainder by document order. Surplus fresh rows are
+        // additions; surplus historical rows are deletions.
+        for(const category of new Set(a.concat(b).map(x=>x.category))){
+          const left=a.filter(x=>x.category===category&&!pairedOld.includes(x));
+          const right=b.filter(x=>x.category===category&&!pairedFresh.includes(x));
+          for(let i=0;i<Math.min(left.length,right.length);i++)bind(left[i],right[i]);
+        }
+        const left=a.filter(x=>!pairedOld.includes(x)),right=b.filter(x=>!pairedFresh.includes(x));
+        for(let i=0;i<Math.min(left.length,right.length);i++)bind(left[i],right[i]);
+      }
+      if(pairedOld.length){old=old.filter(x=>!pairedOld.includes(x));fresh=fresh.filter(x=>!pairedFresh.includes(x));}
+    }
   }
   match(key,true);match(x=>x.text,false);
   // Pair likely edits by text similarity. Unmatched old/new rows are deletions/additions;

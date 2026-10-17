@@ -364,7 +364,7 @@ function loadTaskIdentityIntermediates(hub,tasksFile,identityFile,snapshots,appl
   const identityTime=fs.existsSync(identityFile)?fs.statSync(identityFile).mtimeMs:0;
   const tasksTime=fs.statSync(tasksFile).mtimeMs+1000;
   const candidates=fs.readdirSync(hub,{withFileTypes:true})
-    .filter(entry=>entry.isFile()&&/^TASKS_(?:before_(?:AI|Gemini)_apply|group_backup)_.*\.md$/i.test(entry.name))
+    .filter(entry=>entry.isFile()&&/^(?:TASKS_(?:before_(?:AI|Gemini)_apply|group_backup)_.*|TASKS\.md\.memo_backup_.*)\.md$/i.test(entry.name))
     .map(entry=>({file:path.join(hub,entry.name),mtime:fs.statSync(path.join(hub,entry.name)).mtimeMs}))
     .filter(entry=>entry.mtime>identityTime&&entry.mtime<=tasksTime)
     .sort((a,b)=>a.mtime-b.mtime)
