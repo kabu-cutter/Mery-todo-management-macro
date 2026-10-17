@@ -1,6 +1,6 @@
-﻿#title = "Mery作業メニュー"
+#title = "Mery作業メニュー"
 
-// Mery タスク管理 v0.7.3
+// Mery タスク管理 v0.7.4
 // クリック用ランチャーマクロ。
 
 var MENU_OPEN_HUB = 1;
@@ -31,6 +31,7 @@ var MENU_THUNDERBIRD_CALENDAR = 25;
 var MENU_TRAVEL_EXPORT = 26;
 var MENU_TRAVEL_IMPORT = 27;
 var MENU_GPT_IMPORT = 28;
+var MENU_TODAY_STATS = 29;
 
 var MACRO_OPEN_HUB = "Mery_作業ハブを開く.js";
 var MACRO_START_TEMPLATE = "Mery_今日の開始テンプレートを挿入.js";
@@ -38,6 +39,7 @@ var MACRO_LOAD_PROJECT_TODO = "Mery_プロジェクトTODOを読み込む.js";
 var MACRO_MERGE_TASKS_DUPLICATES = "Mery_TASKS今日分の重複項目を整理.js";
 var MACRO_MERGE_LOG_DATES = "Mery_LOG同日日付を統合.js";
 var MACRO_DAILY_REVIEW = "Mery_日次レビューを作成.js";
+var MACRO_TODAY_STATS = "Mery_今日やる統計.js";
 var MACRO_GEMINI_TASK = "Geminiタスク管理.js";
 var MACRO_GEMINI_TASKS_TODAY = "Mery_TASKS今日分をGeminiで整理.js";
 var MACRO_APPLY_TASKS_PLAN = "Mery_TASKS案を今日のTASKSへ反映.js";
@@ -71,6 +73,7 @@ function main() {
         menu.Add("TASKS.md 今日分の重複項目を整理", MENU_MERGE_TASKS_DUPLICATES);
         menu.Add("LOG.md の同日日付を統合", MENU_MERGE_LOG_DATES);
         menu.Add("日次レビューを作成", MENU_DAILY_REVIEW);
+        menu.Add("今日やる統計を表示", MENU_TODAY_STATS);
         menu.Add("", 0, meMenuSeparator);
         menu.Add("Geminiで選択範囲をタスク整理", MENU_GEMINI_TASK);
         menu.Add("TASKS.md今日分をGPT / Geminiで整理", MENU_GEMINI_TASKS_TODAY);
@@ -113,6 +116,7 @@ function main() {
         if (selected === MENU_MERGE_TASKS_DUPLICATES) return runMacro(MACRO_MERGE_TASKS_DUPLICATES);
         if (selected === MENU_MERGE_LOG_DATES) return runMacro(MACRO_MERGE_LOG_DATES);
         if (selected === MENU_DAILY_REVIEW) return runMacro(MACRO_DAILY_REVIEW);
+        if (selected === MENU_TODAY_STATS) return runMacro(MACRO_TODAY_STATS);
         if (selected === MENU_GEMINI_TASK) return runMacro(MACRO_GEMINI_TASK);
         if (selected === MENU_GEMINI_TASKS_TODAY) return runMacro(MACRO_GEMINI_TASKS_TODAY);
         if (selected === MENU_GPT_IMPORT) return runMacro("Mery_GPT回答をTASKS案へ取り込む.js");
@@ -255,3 +259,4 @@ function getMeryEditor() {
 function menuMessage(message) {
     new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 0x30);
 }
+
