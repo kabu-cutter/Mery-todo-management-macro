@@ -28,6 +28,24 @@ Mery Gemini Task Macro は、Windows 向けテキストエディタ **Mery** 上
 
 TASKS.mdで同じ欄の項目を編集・追加・削除した場合も、変更前の保存状態と文面を照合してIDを引き継ぎます。編集と新規追加を安全に分けられない場合は、誤ったToDoへの同期を避けるため処理を止めます。
 
+## ChromebookでTASKSを使う（任意のDrive同期）
+
+作業メニューには「外出: Chromebook用TASKSを書き出す」と「帰宅: ChromebookのTASKSを取り込む」があります。外出を選ぶと Google Drive for desktop の同期フォルダーを選ぶ画面が開き、`TASKS.md` とそこから参照している `img` / `notes` ファイルを書き出します。Chromebookではメモや資料も参照・編集できます。
+
+### 外出・帰宅の操作
+
+1. Windowsで作業メニューから「外出: Chromebook用TASKSを書き出す」を選び、Google Drive for desktop の同期フォルダーを指定します。書き出し前に開いている `TASKS.md` は保存されます。
+2. Chromebookで同じGoogleアカウントを開き、Drive内の対象フォルダーをオフライン利用可能にします。Drive設定の「オフライン」を有効にした後、Chromebookの「ファイル」アプリで Google Drive を開き、対象フォルダーを選択して「オフラインで使用可能」をオンにします。チェックマークが付いたら準備完了です。詳しくは [Google公式のChromebook向け手順](https://support.google.com/chromebook/answer/2809731?hl=ja) を参照してください。
+3. 外出中はChromebook側の `TASKS.md` とリンク先ファイルを編集し、Windows側では同じファイルを編集しません。複数端末で同時に編集すると、Driveの同期競合が起きる場合があります。
+4. 帰宅後、Driveがオンライン同期を終えたら、作業メニューの「帰宅: ChromebookのTASKSを取り込む」を選び、外出時と同じフォルダーを指定します。競合がない場合は変更前バックアップを作成してから、TASKSとリンク先のメモ・資料を取り込みます。Windows側でも同じファイルを変更していた場合は、自動上書きを止めます。
+5. 取り込んだ内容を確認し、必要に応じてGoogle Tasks、Googleカレンダー、Thunderbird CalDAVの同期メニューを個別に実行します。帰宅操作が各サービスへ自動送信することはありません。
+
+### マクロバーにボタンを置く
+
+作業メニューの「作業メニューのボタン追加案内」を使うと、メニュー全体を開くボタンをマクロバーに追加できます。外出と帰宅を個別のボタンにしたい場合は、「マクロのカスタマイズ」で `Mery_Chromebook外出用に書き出す.js` と `Mery_Chromebookから帰宅して取り込む.js` をそれぞれ登録し、マクロバーに表示します。どちらのボタンも、押したときだけ処理を開始します。
+
+この機能は選んだDriveフォルダーを介した任意のクラウド利用です。ローカルのTASKSを正本として保ち、外出時だけコピーして使います。メモ・資料はTASKSから参照しているファイルに限って持ち出します。未参照ファイルや `GOALS.md` / `LOG.md` はコピーしません。Driveへ置いた内容はGoogleアカウントに同期されるため、保存先を選ぶ前に取り扱いを確認してください。
+
 ## 今日の開始テンプレートと時刻付きTODO
 
 作業メニューの「今日の開始テンプレートを挿入（前日の未完了TODOを引き継ぐ）」を使うと、直近の過去日セクションにある未完了TODOを今日へ複製します。分類、メモ、資料リンク、期限日は引き継ぎ、完了済みTODOは除きます。作業時刻とCalDAV同期IDは今日の複製からだけ除くため、前日の行は元の記録のまま残り、資料リンクの参照定義も引き続き使えます。
@@ -463,7 +481,7 @@ Node.js 24 以上で実行します。
 
 ```text
 node tests/run.cjs
-node --test tests/calendar.cjs tests/tasks.cjs tests/task-identities.cjs tests/standalone.cjs tests/grouping.cjs tests/goals.cjs
+node --test tests/calendar.cjs tests/tasks.cjs tests/task-identities.cjs tests/standalone.cjs tests/grouping.cjs tests/goals.cjs tests/chromebook-travel.cjs
 node calendar-sync/build-single-file.cjs
 ```
 

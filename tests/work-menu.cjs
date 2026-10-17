@@ -40,3 +40,15 @@ test('memo indentation formatter is available from the work menu',()=>{
  assert.ok(items.some(item=>item[0]==='TASKS.mdのメモ欄のインデントを整える'));
  assert.deepEqual(calls,['C:\\Mery\\Macros\\Mery_TASKSメモ欄のインデントを整える.js']);
 });
+
+test('Chromebook out and return actions are available from the work menu',()=>{
+ const items=[],calls=[];
+ context.macroFileExistsBesideLauncher=()=>true;
+ context.CreatePopupMenu=()=>({Add:(...args)=>items.push(args),Track:()=>27});
+ context.meMenuSeparator=0;context.meMenuGrayed=1;
+ context.runMacro=name=>calls.push(name);
+ context.main();
+ assert.ok(items.some(item=>item[0]==='外出: Chromebook用TASKSを書き出す'));
+ assert.ok(items.some(item=>item[0]==='帰宅: ChromebookのTASKSを取り込む'));
+ assert.deepEqual(calls,['Mery_Chromebookから帰宅して取り込む.js']);
+});

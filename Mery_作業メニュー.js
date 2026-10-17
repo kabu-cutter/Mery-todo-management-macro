@@ -28,6 +28,8 @@ var MENU_BUTTON_GUIDE = 22;
 var MENU_FORMAT_MEMO_INDENT = 23;
 var MENU_THUNDERBIRD_CALENDAR = 24;
 var MENU_RESTORE_TASKS_GROUP_BACKUP = 25;
+var MENU_CHROMEBOOK_OUT = 26;
+var MENU_CHROMEBOOK_HOME = 27;
 
 var MACRO_OPEN_HUB = "Mery_作業ハブを開く.js";
 var MACRO_START_TEMPLATE = "Mery_今日の開始テンプレートを挿入.js";
@@ -47,6 +49,8 @@ var MACRO_THUNDERBIRD_CALENDAR = "Mery_Thunderbirdと同期.js";
 var MACRO_GOALS = "Mery_目標管理.js";
 var MACRO_FORMAT_MEMO_INDENT = "Mery_TASKSメモ欄のインデントを整える.js";
 var MACRO_RESTORE_TASKS_GROUP_BACKUP = "Mery_TASKSグループ化バックアップから復旧.js";
+var MACRO_CHROMEBOOK_OUT = "Mery_Chromebook外出用に書き出す.js";
+var MACRO_CHROMEBOOK_HOME = "Mery_Chromebookから帰宅して取り込む.js";
 
 main();
 
@@ -83,6 +87,8 @@ function main() {
         menu.Add("", 0, meMenuSeparator);
         menu.Add("Thunderbird カレンダーと双方向同期", MENU_THUNDERBIRD_CALENDAR);
         menu.Add("Google カレンダーと双方向同期", MENU_GOOGLE_CALENDAR);
+        menu.Add("外出: Chromebook用TASKSを書き出す", MENU_CHROMEBOOK_OUT);
+        menu.Add("帰宅: ChromebookのTASKSを取り込む", MENU_CHROMEBOOK_HOME);
         menu.Add("作業ハブのバックアップ…", MENU_BACKUP);
         menu.Add("作業メニューのボタン追加案内", MENU_BUTTON_GUIDE);
 
@@ -119,6 +125,8 @@ function main() {
         if (selected === MENU_RESTORE_TASKS_GROUP_BACKUP) return runMacro(MACRO_RESTORE_TASKS_GROUP_BACKUP);
         if (selected === MENU_THUNDERBIRD_CALENDAR) return runMacro(MACRO_THUNDERBIRD_CALENDAR);
         if (selected === MENU_GOOGLE_CALENDAR) return runMacro(MACRO_GOOGLE_CALENDAR);
+        if (selected === MENU_CHROMEBOOK_OUT) return runMacro(MACRO_CHROMEBOOK_OUT);
+        if (selected === MENU_CHROMEBOOK_HOME) return runMacro(MACRO_CHROMEBOOK_HOME);
         if (selected === MENU_BUTTON_GUIDE) return showMacroButtonGuide();
 
     } catch (e) {
