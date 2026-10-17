@@ -2,14 +2,27 @@
 
 var HUB_DIR = "C:\\Projects\\ai-work-hub";
 var GOALS_PATH = HUB_DIR + "\\GOALS.md";
+var TASKS_PATH = HUB_DIR + "\\TASKS.md";
+
+function showSyncMessage(message) {
+    new ActiveXObject("WScript.Shell").Popup(String(message), 0, "MeryTODO CalDAV", 48);
+}
+
+function showSyncError(message) {
+    new ActiveXObject("WScript.Shell").Popup(String(message), 0, "MeryTODO CalDAV - エラー", 16);
+}
 
 syncThunderbird();
 
 function syncThunderbird() {
     try {
-        checkGoalsSaved();
         var fso = new ActiveXObject("Scripting.FileSystemObject");
         var shell = new ActiveXObject("WScript.Shell");
+        if (!isThunderbirdRunning()) {
+            showSyncError("Thunderbirdが起動していません。\n\nThunderbirdを起動してカレンダーが読み込まれた後、もう一度同期してください。");
+            return;
+        }
+        if (!checkFilesSaved(fso, shell)) return;
         var node = shell.ExpandEnvironmentStrings("%ProgramFiles%\\nodejs\\node.exe");
         if (!fso.FileExists(node)) throw new Error("Node.js が見つかりません: " + node);
         var server = HUB_DIR + "\\MeryTODOmanagem-macro\\calendar-sync\\goals-caldav-server.cjs";
@@ -27,29 +40,34 @@ function syncThunderbird() {
         var report = HUB_DIR + "\\MERYTODO_CALDAV_REPORT.md";
         var previewCode = shell.Run("\"" + node + "\" \"" + worker + "\" --hub \"" + HUB_DIR + "\"", 0, true);
         if (previewCode !== 0 && previewCode !== 2) {
-            if (fso.FileExists(report)) editor.OpenFile(report, 0, meOpenAllowNewWindow);
+            if (fso.FileExists(report)) openReport(shell, report);
             throw new Error("同期プレビューに失敗しました（終了コード " + previewCode + "）。開いたレポートに原因を表示しました。");
         }
-        editor.OpenFile(report, 0, meOpenAllowNewWindow);
+        openReport(shell, report);
         if (shell.Popup("同期プレビューを開きました。競合や削除を確認してください。\n反映すると GOALS.md と TASKS.md の変更前バックアップを作成します。\n\nこの内容を同期しますか？", 0, "MeryTODO CalDAV", 0x24) !== 6) return;
         var applyCode = shell.Run("\"" + node + "\" \"" + worker + "\" --hub \"" + HUB_DIR + "\" --apply", 0, true);
-        editor.OpenFile(report, 0, meOpenAllowNewWindow);
-        alert(applyCode === 0 || applyCode === 2 ? "同期処理が終わりました。結果レポートを確認してください。" : "同期に失敗しました。結果レポートとNode.jsの出力を確認してください。");
+        openReport(shell, report);
+        showSyncMessage(applyCode === 0 || applyCode === 2 ? "同期処理が終わりました。結果レポートを確認してください。" : "同期に失敗しました。結果レポートとNode.jsの出力を確認してください。");
     } catch (e) {
-        alert("MeryTODO CalDAV同期を開始できませんでした。\n" + e.message);
+        showSyncError("MeryTODO CalDAV同期を開始できませんでした。\n" + e.message);
     }
 }
 
-function checkGoalsSaved() {
-    var fso = new ActiveXObject("Scripting.FileSystemObject");
+function isThunderbirdRunning() {
+    var shell = new ActiveXObject("WScript.Shell");
+    var process = shell.Exec("tasklist.exe /FI \"IMAGENAME eq thunderbird.exe\" /NH");
+    var output = process.StdOut.ReadAll();
+    return /(^|\r?\n)\s*thunderbird\.exe\s/i.test(output);
+}
+
+function checkFilesSaved(fso, shell) {
     if (!fso.FileExists(GOALS_PATH)) throw new Error("GOALS.md がありません。先に目標管理メニューで作成してください。");
-    var target = fso.GetAbsolutePathName(GOALS_PATH).toLowerCase();
-    for (var i = 0; i < editor.Documents.Count; i++) {
-        var doc = editor.Documents.Item(i);
-        if (doc.FullName && fso.GetAbsolutePathName(doc.FullName).toLowerCase() === target && !doc.Saved) {
-            throw new Error("GOALS.md に未保存の変更があります。保存してから同期してください。");
-        }
-    }
+    if (!fso.FileExists(TASKS_PATH)) throw new Error("TASKS.md がありません。");
+    return shell.Popup("同期前にMeryで GOALS.md と TASKS.md を保存してください。\n\n保存しましたか？", 0, "MeryTODO CalDAV", 0x24) === 6;
+}
+
+function openReport(shell, path) {
+    shell.Run("\"" + path + "\"", 1, false);
 }
 
 function calDavHealthy() {

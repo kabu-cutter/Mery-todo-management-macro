@@ -47,7 +47,7 @@ main ();
 async function main () {
     let promptText = sel . Text . trim ();
     if ( roughTokenize ( promptText ) > MAX_PROMPT_TOKEN ) {
-        alert ( "プロンプトの文字数が多すぎます。文字数を少なくしてください。" );
+        shell . Popup ( "プロンプトの文字数が多すぎます。文字数を少なくしてください。" , 0 , "Gemini" , 48 );
         return ;
     }
 
@@ -64,7 +64,7 @@ async function main () {
 
         const apiKey = shell . getEnv ( API_KEY_ENV );
         if ( ! apiKey ) {
-            alert ( `${ API_KEY_ENV } が設定されていません` );
+            shell . Popup ( `${ API_KEY_ENV } が設定されていません` , 0 , "Gemini" , 48 );
             return ;
         }
 

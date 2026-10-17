@@ -215,18 +215,25 @@ function memoWriteNew(path, text) {
     try { stream.Type=2; stream.Charset="utf-8"; stream.Open(); stream.WriteText(text); stream.SaveToFile(path,1); }
     finally { if(stream.State !== 0) stream.Close(); }
 }
+function getMeryEditor() {
+    if (typeof editor !== "undefined") return editor;
+    if (typeof Editor !== "undefined") return Editor;
+    throw new Error("Meryのエディターオブジェクトを取得できません。");
+}
 function memoOpen(path, fso) {
+    var activeEditor=getMeryEditor();
     var target=fso.GetAbsolutePathName(path).toLowerCase();
-    for(var i=0;i<editor.Documents.Count;i++) { var doc=editor.Documents.Item(i); if(doc.FullName && fso.GetAbsolutePathName(doc.FullName).toLowerCase()===target) { doc.Activate(); memoVertical(); return doc; } }
-    var text=memoReadText(path); editor.NewFile(); var opened=editor.ActiveDocument;
+    for(var i=0;i<activeEditor.Documents.Count;i++) { var doc=activeEditor.Documents.Item(i); if(doc.FullName && fso.GetAbsolutePathName(doc.FullName).toLowerCase()===target) { doc.Activate(); memoVertical(); return doc; } }
+    var text=memoReadText(path); activeEditor.NewFile(); var opened=activeEditor.ActiveDocument;
     opened.Text=text; opened.Save(path); memoVertical(); opened.selection.StartOfDocument(false); return opened;
 }
 function memoVertical() {
+    var activeEditor=getMeryEditor();
     // 縦書きはトグル式なので、現在のチェック状態を確認してから切り替える。
-    var status=editor.QueryStatusByID(2238);
+    var status=activeEditor.QueryStatusByID(2238);
     if((status & 2)!==0) return;
     if((status & 1)===0) throw new Error("TXTは開きました。［表示］→［縦書き］で切り替えてください。");
-    editor.ExecuteCommandByID(2238);
+    activeEditor.ExecuteCommandByID(2238);
 }
 function memoSelection(doc) {
     var sel=doc.selection;
@@ -242,7 +249,7 @@ function memoCheckSync(fso) {
 var IMG_DIR = HUB_DIR + "\\img";
 function assetExtension(path, fso) {
     var ext=fso.GetExtensionName(path).toLowerCase();
-    if(!/^(png|jpg|jpeg|gif|bmp|webp|tif|tiff|pdf)$/.test(ext)) throw new Error("画像またはPDFを選んでください。");
+    if(!/^(png|jpg|jpeg|gif|bmp|webp|tif|tiff|pdf|txt|docx)$/.test(ext)) throw new Error("TXT、DOCX、画像またはPDFを選んでください。");
     return ext;
 }
 function assetResolve(docPath,target,fso) {
@@ -276,8 +283,8 @@ function assetInsert(context,target,label) {
     return lines.join(context.newline).replace(/(?:\r?\n)*$/,"")+context.newline+context.newline+"["+name+"]: "+target+context.newline;
 }
 function assetPick(fso) {
-    var shell=new ActiveXObject("WScript.Shell"),script=HUB_DIR+"\\pick-asset.ps1";
-    if(!fso.FileExists(script)) throw new Error("pick-asset.ps1がありません。");
+    var shell=new ActiveXObject("WScript.Shell"),script=fso.BuildPath(fso.GetParentFolderName(ScriptFullName),"Mery_ファイル選択.ps1");
+    if(!fso.FileExists(script)) throw new Error("Mery_ファイル選択.ps1がありません。マクロと同じフォルダーに配置してください。");
     var result=fso.BuildPath(String(fso.GetSpecialFolder(2)),fso.GetTempName());
     if(/["%\r\n]/.test(result)) throw new Error("一時保存先を確認してください。");
     if(fso.FileExists(result)) throw new Error("一時ファイル名が重複したため中止しました。");
@@ -290,7 +297,7 @@ function assetPick(fso) {
 function assetMain(mode) {
     var copied="";
     try {
-        var doc=editor.ActiveDocument, fso=new ActiveXObject("Scripting.FileSystemObject");
+        var doc=getMeryEditor().ActiveDocument, fso=new ActiveXObject("Scripting.FileSystemObject");
         if(!doc.FullName) throw new Error("TODOの文書を先に保存してください。");
         memoCheckSync(fso);
         var selected=memoSelection(doc),original=doc.Text,context=memoContext(original,selected.top,selected.bottom);
@@ -311,7 +318,7 @@ function assetMain(mode) {
         var source=assetPick(fso);if(!source)return;
         var ext=assetExtension(source,fso);
         if(!fso.FileExists(source)) throw new Error("選んだファイルが見つかりません。");
-        var kind=ext==="pdf" ? "PDF" : "画像";
+        var kind=ext==="pdf" ? "PDF" : ext==="txt" ? "TXT" : ext==="docx" ? "DOCX" : "画像";
         var label=prompt("短い表示名",fso.GetBaseName(source));if(label===null)return;
         label=memoTrim(label).replace(/[\[\]\\\r\n]/g,"_");if(!label)label="資料";
         label=kind+": "+label;
@@ -326,12 +333,12 @@ function assetMain(mode) {
         var base=fso.GetAbsolutePathName(fso.GetParentFolderName(doc.FullName)).toLowerCase();
         var target=(base===fso.GetAbsolutePathName(HUB_DIR).toLowerCase()?"img/":IMG_DIR.replace(/\\/g,"/")+"/")+encodeURIComponent(fso.GetFileName(path));
         var existing=assetLinks(context);
-        for(var j=0;j<existing.length;j++) if(assetResolve(doc.FullName,existing[j].target,fso).toLowerCase()===path.toLowerCase()) { macroMessage("この資料はすでに付いています。");return; }
+        for(var j=0;j<existing.length;j++) if(assetResolve(doc.FullName,existing[j].target,fso).toLowerCase()===path.toLowerCase()) { assetMessage("この資料はすでに付いています。");return; }
         memoSaveTodo(doc,original,assetInsert(context,target,label),memoStamp(new Date()),fso);
-    } catch(e) { macroMessage("資料: "+e.message+(copied ? "\n\nコピー済みの資料: "+copied : "")); }
+    } catch(e) { assetMessage("資料: "+e.message+(copied ? "\n\nコピー済みの資料: "+copied : "")); }
 }
 
-function macroMessage(message) {
+function assetMessage(message) {
     new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 0x30);
 }
 

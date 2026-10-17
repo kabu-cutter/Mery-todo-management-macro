@@ -11,7 +11,7 @@ function main() {
         var fso = new ActiveXObject("Scripting.FileSystemObject");
         var helper = fso.BuildPath(fso.GetParentFolderName(ScriptFullName), "calendar-sync\\calendar-sync.cjs");
         if (!fso.FileExists(helper)) {
-            alert("calendar-sync フォルダーをマクロと同じフォルダーへ置いてください。\n" + helper);
+            showError("calendar-sync フォルダーをマクロと同じフォルダーへ置いてください。\n" + helper);
             return;
         }
         var menu = CreatePopupMenu();
@@ -23,10 +23,13 @@ function main() {
         if (selected === 0) return;
         var statusPath = HUB_DIR + "\\.mery-calendar\\run-status.json";
         if (selected === 4) {
-            if (!fso.FileExists(statusPath)) { alert("まだ処理状況がありません。接続設定またはプレビューを実行してください。"); return; }
+            if (!fso.FileExists(statusPath)) { showError("まだ処理状況がありません。接続設定またはプレビューを実行してください。"); return; }
             var current = JSON.parse(readUtf8Text(statusPath));
             if (current.phase === "running" || current.phase === "queued") {
-                showStatusMessage("処理中です。少し待ってから、もう一度結果を確認してください。\n開始: " + current.startedAt); return;
+                var progress = current.mode === "--auth"
+                    ? "Google カレンダー / Tasks の接続設定中です。\nブラウザー認証を求められた場合は、Googleへのアクセスを許可してください。"
+                    : "処理中です。少し待ってから、もう一度結果を確認してください。";
+                showStatusMessage(progress + "\n開始: " + current.startedAt); return;
             }
             if (current.mode === "--sync") reloadOpenHubDocuments();
             var finishedReport = HUB_DIR + "\\CALENDAR_SYNC_REPORT.md";
@@ -41,7 +44,7 @@ function main() {
         }
 
         if (selected !== 1) {
-            if (!Confirm("開いている TASKS.md / LOG.md / TODO.md の編集を保存して処理します。\n"
+            if (!confirmAction("開いている TASKS.md / LOG.md / TODO.md の編集を保存して処理します。\n"
                 + (selected === 3 ? "追加・変更・削除を双方向に反映します。競合は保留し、ローカル変更前にバックアップを作成します。\n初回はプレビューで対象を確認してください。\n" : "カレンダーの読み取りと同期内容の確認を行います。\n")
                 + "続行しますか？")) return;
             saveOpenHubDocuments();
@@ -51,9 +54,13 @@ function main() {
         var runner = new ActiveXObject("WScript.Shell");
         writeRunStatus(statusPath, JSON.stringify({phase:"queued",mode:mode,startedAt:new Date().toLocaleString(),startedMs:new Date().getTime()}));
         runner.Run(quoteArg(NODE_EXE) + " " + quoteArg(helper) + " --hub " + quoteArg(HUB_DIR) + " " + mode + " --tasks", 0, false);
-        showStatusMessage("処理を開始しました。\n完了後、このマクロの「処理状況・結果を確認」を選んでください。\n同期中の TASKS.md / LOG.md / TODO.md の編集は、完了後に行ってください。");
+        var progressMessage = mode === "--auth"
+            ? "Google カレンダー / Tasks の接続設定中です。\nブラウザー認証を求められた場合は、Googleへのアクセスを許可してください。\n完了後は「処理状況・結果を確認」を選んでください。"
+            : "処理を開始しました。\n完了後、このマクロの「処理状況・結果を確認」を選んでください。\n同期中の TASKS.md / LOG.md / TODO.md の編集は、完了後に行ってください。";
+        Status = progressMessage;
+        showStatusMessage(progressMessage);
     } catch (e) {
-        alert("Google カレンダー同期エラー: " + e.message);
+        showError("Google カレンダー同期エラー: " + e.message);
     }
 }
 
@@ -71,8 +78,8 @@ function quoteArg(value) {
 function findDocument(path) {
     var fso = new ActiveXObject("Scripting.FileSystemObject");
     var target = fso.GetAbsolutePathName(path).toLowerCase();
-    for (var i = 0; i < editor.Documents.Count; i++) {
-        var d = editor.Documents.Item(i);
+    for (var i = 0; i < getMeryEditor().Documents.Count; i++) {
+        var d = getMeryEditor().Documents.Item(i);
         if (d.FullName && fso.GetAbsolutePathName(d.FullName).toLowerCase() === target) return d;
     }
     return null;
@@ -89,16 +96,16 @@ function saveOpenHubDocuments() {
 
 function saveOpenTodoDocuments() {
     var fso = new ActiveXObject("Scripting.FileSystemObject");
-    for (var i=0;i<editor.Documents.Count;i++) {
-        var d=editor.Documents.Item(i);
+    for (var i=0;i<getMeryEditor().Documents.Count;i++) {
+        var d=getMeryEditor().Documents.Item(i);
         if(d.FullName && fso.GetFileName(d.FullName).toLowerCase()==="todo.md" && !d.Saved) d.Save(d.FullName);
     }
 }
 
 function reloadOpenHubDocuments() {
     var fso = new ActiveXObject("Scripting.FileSystemObject");
-    for (var j=0;j<editor.Documents.Count;j++) {
-        var todo=editor.Documents.Item(j);
+    for (var j=0;j<getMeryEditor().Documents.Count;j++) {
+        var todo=getMeryEditor().Documents.Item(j);
         if(todo.FullName && fso.GetFileName(todo.FullName).toLowerCase()==="todo.md") {
             if(!todo.Saved) throw new Error("TODO.md に未保存の変更があります。開き直して確認してください。");
             todo.Text=readUtf8Text(todo.FullName);todo.Saved=true;
@@ -119,8 +126,8 @@ function reloadOpenHubDocuments() {
 function showReport(path) {
     var d = findDocument(path);
     if (!d) {
-        editor.NewFile();
-        d = editor.ActiveDocument;
+        getMeryEditor().NewFile();
+        d = getMeryEditor().ActiveDocument;
     }
     d.Text = readUtf8Text(path);
     d.Save(path);
@@ -157,6 +164,17 @@ function readUtf8Text(path) {
 }
 
 
+function getMeryEditor() {
+    if (typeof Editor !== "undefined") return Editor;
+    if (typeof editor !== "undefined") return editor;
+    throw new Error("Meryのエディターオブジェクトを取得できません。");
+}
+function confirmAction(message) {
+    return new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery Google 同期", 4 + 32) === 6;
+}
+function showError(message) {
+    new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery Google 同期", 0x30);
+}
 function showStatusMessage(text) {
     var path = HUB_DIR + "\\SYNC_STATUS.md";
     writeRunStatus(path, "# Google 同期の処理状況\n\n" + text + "\n" );

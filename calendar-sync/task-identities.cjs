@@ -16,10 +16,14 @@ function similarity(left,right){
   for(let i=1;i<=a.length;i++)for(let j=b.length;j>=1;j--){longest[j]=a[i-1]===b[j-1]?longest[j-1]+1:0;common=Math.max(common,longest[j]);}
   return Math.max(1-previous[b.length]/Math.max(a.length,b.length),common/Math.min(a.length,b.length));
 }
-function pairEdited(old,fresh,ids,textOf){
-  const threshold=.55,margin=.1;let matched=0,ambiguous=false;
+function pairEdited(old,fresh,ids,textOf,options={}){
+  const threshold=options.threshold??.55,margin=options.margin??.1,minLength=options.minLength??0;let matched=0,ambiguous=false;
   while(old.length&&fresh.length){
-    const scores=old.map(a=>fresh.map(b=>similarity(textOf(a),textOf(b))));
+    const scores=old.map(a=>fresh.map(b=>{
+      const left=textOf(a),right=textOf(b);
+      if(Math.min([...left.normalize('NFKC').trim()].length,[...right.normalize('NFKC').trim()].length)<minLength)return 0;
+      return similarity(left,right);
+    }));
     const best=(values)=>{
       const sorted=values.map((score,index)=>({score,index})).sort((a,b)=>b.score-a.score);
       return sorted[0]&&sorted[0].score>=threshold&&(sorted.length===1||sorted[0].score-sorted[1].score>=margin)?sorted[0].index:-1;
@@ -59,7 +63,17 @@ function restore(text,snapshots,makeId=core.uuid){
     if(a.length&&b.length&&(result.ambiguous||!result.matched&&!anchoredContexts.has(k)))throw Error('TASKS の編集・追加・削除の対応が曖昧で、IDを安全に特定できません。同期IDを残すか、変更を分けて同期してください。');
     old=old.filter(x=>!a.includes(x));fresh=fresh.filter(x=>!b.includes(x));
   }
-  if(old.length&&fresh.length){if(old.length===1&&fresh.length===1)ids.set(fresh[0].index,old[0].id);else throw Error('TASKS の移動と編集が重なり、IDを特定できません。移動と編集を分けて同期してください。');}
+  // A task can be both renamed and moved to another date/section. After the
+  // context-local pass, pair only globally distinctive, high-confidence edits.
+  // Keep the existing fail-safe below for anything that remains ambiguous.
+  const onlyOneUnmatchedPair=old.length===1&&fresh.length===1;
+  if(old.length&&fresh.length&&!onlyOneUnmatchedPair)pairEdited(old,fresh,ids,identityText,{threshold:.72,margin:.18,minLength:8});
+  if(old.length&&fresh.length){
+    if(onlyOneUnmatchedPair)ids.set(fresh[0].index,old[0].id);
+    else if(old.some(a=>fresh.some(b=>similarity(identityText(a),identityText(b))>=.55)))throw Error('TASKS の移動と編集が重なり、IDを特定できません。移動と編集を分けて同期してください。');
+    // With no plausible text relationship, keep fresh IDs as additions and let
+    // unmatched historical IDs represent deletions; do not confuse these with edits.
+  }
   const parsedLines=new Set(parsed.items.map(x=>x.index));
   const loose=text.replace(/\r\n?/g,'\n').split('\n').filter((line,index)=>!parsedLines.has(index)).map(line=>line.match(/^[-*]\s+\[[ xX]\]\s*(.*)$/)?.[1]?.replace(/\s*<!-- mery-calendar:[a-f0-9]{32} -->/g,'').trim()).filter(Boolean);
   if(old.some(x=>loose.includes(x.text)))throw Error('同期済み項目が日付見出しの外にあります。日付見出しを確認してください。');

@@ -5,10 +5,9 @@
 ## 初回設定
 
 1. 以前 OAuth を設定した Google Cloud プロジェクトで **Google Tasks API** を有効にします。Google Calendar API も引き続き使用します。
-2. OAuth の同意画面でスコープを手動設定している場合は `https://www.googleapis.com/auth/tasks` を追加します。
-3. 認証 JSON は従来の `.mery-calendar/oauth-client.json` をそのまま使います。
-4. 更新したマクロを起動し「Google カレンダー / Tasks の接続設定」を実行し、Google Tasks へのアクセスも許可します。
-5. プレビューで対象を確認してから同期を実行します。
+2. 認証 JSON は従来の `.mery-calendar/oauth-client.json` をそのまま使います。
+3. 更新したマクロを起動し「Google カレンダー / Tasks の接続設定」を実行し、Google Tasks へのアクセスを許可します。
+4. プレビューで対象を確認してから同期を実行します。
 
 ## 対象プロジェクト
 

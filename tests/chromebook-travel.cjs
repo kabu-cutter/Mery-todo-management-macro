@@ -22,15 +22,51 @@ function fixture() {
   return { root, hub, drive, task };
 }
 
-test('export makes an offline working copy with stable IDs and only referenced assets', t => {
+test('export makes a readable offline copy without visible IDs and only referenced assets', t => {
   const f = fixture(); t.after(() => fs.rmSync(f.root, { recursive: true, force: true }));
   const result = travel.exportTravel(f.hub, f.drive);
   const copy = fs.readFileSync(path.join(f.drive, 'TASKS.md'), 'utf8');
   assert.equal(result.taskCount, 1);
-  assert.match(copy, /mery-calendar:a{32}/);
+  assert.doesNotMatch(copy, /mery-calendar:[a-f0-9]{32}/);
   assert.equal(fs.readFileSync(path.join(f.drive, 'notes/a.txt'), 'utf8'), 'memo base');
   assert.equal(fs.readFileSync(path.join(f.drive, 'img/a.png'), 'utf8'), 'image base');
   assert.equal(fs.existsSync(path.join(f.drive, 'img/unreferenced.png')), false);
+});
+
+test('direct Drive transfer uploads and downloads TASKS, metadata, and linked files', async t => {
+  const f = fixture(); t.after(() => fs.rmSync(f.root, { recursive: true, force: true }));
+  travel.exportTravel(f.hub, f.drive);
+  const entries = new Map([['root', { id: 'root', name: '', mimeType: 'application/vnd.google-apps.folder', parents: [] }]]);
+  const content = new Map(); let next = 1;
+  const api = {
+    async driveRequest(method, resource, body) {
+      if (method === 'POST') {
+        const item = { ...body, id: 'folder-' + next++, parents: body.parents || [] };
+        entries.set(item.id, item); return item;
+      }
+      const query = new URLSearchParams(resource.slice(resource.indexOf('?') + 1));
+      const parent = query.get('q').match(/^'([^']+)' in parents/)[1];
+      return { files: [...entries.values()].filter(x => x.parents.includes(parent)) };
+    },
+    async driveUpload(fileId, metadata, bytes, mimeType) {
+      const existing = fileId && entries.get(fileId);
+      const item = { id: fileId || 'file-' + next++, name: metadata.name, mimeType, parents: existing?.parents || metadata.parents || [] };
+      entries.set(item.id, item); content.set(item.id, Buffer.from(bytes)); return item;
+    },
+    async driveDownload(id) { return content.get(id); }
+  };
+  assert.equal(await travel.uploadDriveTree(api, 'root', f.drive), 4);
+  const taskFile = [...entries.values()].find(x => x.name === 'TASKS.md');
+  fs.writeFileSync(path.join(f.drive, 'TASKS.md'), 'revised travel copy');
+  assert.equal(await travel.uploadDriveTree(api, 'root', f.drive), 4);
+  assert.equal([...entries.values()].filter(x => x.name === 'TASKS.md').length, 1);
+  assert.equal([...entries.values()].find(x => x.name === 'TASKS.md').id, taskFile.id);
+  const downloaded = path.join(f.root, 'downloaded');
+  assert.equal(await travel.downloadDriveTree(api, 'root', downloaded), 4);
+  assert.equal(fs.readFileSync(path.join(downloaded, 'TASKS.md'), 'utf8'), 'revised travel copy');
+  assert.equal(fs.readFileSync(path.join(downloaded, 'notes/a.txt'), 'utf8'), 'memo base');
+  assert.equal(fs.readFileSync(path.join(downloaded, 'img/a.png'), 'utf8'), 'image base');
+  assert.equal(fs.existsSync(path.join(downloaded, 'img/unreferenced.png')), false);
 });
 
 test('return imports Chromebook edits, backs up TASKS, and updates Google and CalDAV identity snapshots', t => {

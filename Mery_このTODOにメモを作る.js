@@ -13,7 +13,7 @@ function main() {
             var menu=CreatePopupMenu();
             menu.Add("メモ欄（メモ：）を挿入・開く",1);
             menu.Add("TXTメモを作りリンクを追加する",2);
-            menu.Add("メモ欄の本文をTXTにする",3);
+            menu.Add("メモ欄の本文をTXTにして入力欄を空にする",3);
             var choice=menu.Track(0); if(!choice) return;
             if(choice===1) {
                 var inserted=memoInsertLabel(context);
@@ -29,10 +29,12 @@ function main() {
         var count=1, name;
         do { name=memoFileName(context.title,stamp,count++); created=fso.BuildPath(NOTES_DIR,name); } while(fso.FileExists(created));
         var target=memoLinkTarget(doc.FullName,name,fso);
-        var updated=memoInsertLink(original,context,target,context.title);
-        updated=memoCompactLinks(updated,memoContext(updated,selected.top,selected.bottom));
+        var baseText=wholeMemo ? memoClearWholeBody(original,context) : original;
+        var baseContext=memoContext(baseText,context.task,context.task);
+        var updated=memoInsertLink(baseText,baseContext,target,context.title);
+        updated=memoCompactLinks(updated,memoContext(updated,context.task,context.task));
         memoWriteNew(created,"タイトル: " + context.title + "\r\n作成日時: " + stamp + "\r\n元の文書: " + doc.FullName + "\r\n\r\n" + body + (body ? "\r\n" : ""));
-        updated=memoMarkSaved(updated,memoContext(updated,selected.top,selected.bottom),doc.FullName,fso);
+        updated=memoMarkSaved(updated,memoContext(updated,context.task,context.task),doc.FullName,fso);
         memoSaveTodo(doc,original,updated,stamp,fso);
         memoOpen(created,fso);
     } catch(e) { macroMessage("メモを作成: " + e.message + (created ? "\n\n作成先を確認してください: " + created : "")); }
@@ -95,6 +97,13 @@ function memoWholeBody(context) {
     while(stop>start && !memoTrim(context.lines[stop-1])) stop--;
     if(start===stop) throw new Error("メモ欄に本文を書いてから実行してください。");
     return memoSelectedBody(context,context.lines.slice(start,stop).join("\n"),start,stop-1);
+}
+function memoClearWholeBody(text,context) {
+    if(context.label < 0) throw new Error("このTODOには「メモ：」欄がありません。");
+    var lines=context.lines.slice(0);
+    var labelIndent=(lines[context.label].match(/^[ \t]*/) || [""])[0];
+    lines.splice(context.label+1,context.memoEnd-context.label-1,labelIndent+"  ");
+    return lines.join(context.newline);
 }
 function memoReferences(lines) {
     var refs={}, fence="", i, match;

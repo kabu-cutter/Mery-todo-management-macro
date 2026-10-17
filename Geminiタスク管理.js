@@ -18,6 +18,13 @@ var OUTPUT_TITLE_TAG = "gemini-output-title";
 var HUB_DIR = "C:\\Projects\\ai-work-hub";
 var OUTBOX_PATH = HUB_DIR + "\\OUTBOX.md";
 
+function showMacroMessage(message) {
+    new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 48);
+}
+
+function confirmMacroYesNo(message) {
+    return new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 4 + 32) === 6;
+}
 main();
 
 function main() {
@@ -31,7 +38,7 @@ function main() {
     var promptLength = sel.TextLength;
 
     if (promptLength === 0) {
-        alert("整理するテキストを選択するか、対象行にカーソルを置いてください。");
+        showMacroMessage("整理するテキストを選択するか、対象行にカーソルを置いてください。");
         return;
     }
 

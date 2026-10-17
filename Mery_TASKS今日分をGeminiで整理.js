@@ -10,12 +10,21 @@ var HUB_DIR = "C:\\Projects\\ai-work-hub";
 var TASKS_PATH = HUB_DIR + "\\TASKS.md";
 var INPUT_PATH = HUB_DIR + "\\TASKS整理入力.md";
 var OUTPUT_PATH = HUB_DIR + "\\TASKS案.md";
+var GPT_PROMPT_PATH = HUB_DIR + "\\TASKS整理プロンプト.txt";
+var OPENAI_CALL_MACRO = "call_openai_api.js";
 
 var SELECTED_TEMPLATE_PROMPT_TAG = "gemini-selected-template-prompt";
 var TEMPORARY_CUSTOM_INSTRUCTION_TAG = "gemini-temporary-custom-instruction";
 var OUTPUT_PATH_TAG = "gemini-output-path";
 var OUTPUT_TITLE_TAG = "gemini-output-title";
 
+function showMacroMessage(message) {
+    new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 48);
+}
+
+function confirmMacroYesNo(message) {
+    return new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 4 + 32) === 6;
+}
 main();
 
 function main() {
@@ -29,17 +38,19 @@ function main() {
         var targetText = extractSection(tasksText, todayHeading);
 
         if (!targetText) {
-            if (!Confirm("今日のTASKSセクションが見つかりません。\nTASKS.md全体を整理対象にしますか？")) {
+            if (!confirmMacroYesNo("今日のTASKSセクションが見つかりません。\nTASKS.md全体を整理対象にしますか？")) {
                 return;
             }
             targetText = tasksText;
         }
 
         if (!targetText || targetText.replace(/\s/g, "").length === 0) {
-            alert("整理するTASKS内容がありません。");
+            showMacroMessage("整理するTASKS内容がありません。");
             return;
         }
 
+        var provider = chooseAIProvider();
+        if (!provider) return;
         var inputText = buildInputText(today, targetText);
 
         var inputDoc = showTextInSingleTab(INPUT_PATH, inputText);
@@ -47,16 +58,33 @@ function main() {
 
         selectAllDocument(inputDoc);
 
+        if (provider === "openai") {
+            inputDoc.Tag(SELECTED_TEMPLATE_PROMPT_TAG) = buildPrompt();
+            inputDoc.Tag(TEMPORARY_CUSTOM_INSTRUCTION_TAG) =
+                "あなたは個人用TASKS.mdの整理係です。日本語Markdownで、未完了は - [ ]、完了済みは - [x] にしてください。";
+            inputDoc.Tag(OUTPUT_PATH_TAG) = OUTPUT_PATH;
+            inputDoc.Tag(OUTPUT_TITLE_TAG) = "TASKS案";
+            inputDoc.Tag("gemini-output-kind") = "OpenAI API";
+            editor.ExecuteMacro(OPENAI_CALL_MACRO);
+            return;
+        }
+        if (provider === "chatgpt") {
+            var promptText = buildPrompt() + "\n\n# 入力テキスト\n\n" + inputText;
+            writeTextFile(GPT_PROMPT_PATH, promptText);
+            copyFileToClipboard(GPT_PROMPT_PATH);
+            new ActiveXObject("WScript.Shell").Run("https://chatgpt.com/", 1, false);
+            showMacroMessage("整理用プロンプトをクリップボードへコピーし、ChatGPTを開きました。\n\nChatGPTへ貼り付けて回答を生成し、回答全体をコピーしてください。\nMeryの作業メニューから「GPT回答をTASKS案へ取り込む」を実行すると、TASKS案.mdへ保存できます。\nその後は「TASKS案を今日のTASKSへ反映」でプレビューして反映します。");
+            return;
+        }
         inputDoc.Tag(SELECTED_TEMPLATE_PROMPT_TAG) = buildPrompt();
         inputDoc.Tag(TEMPORARY_CUSTOM_INSTRUCTION_TAG) =
-            "あなたは個人用TASKS.mdの整理係です。出力は日本語Markdownで、未完了は `- [ ]`、完了済みは `- [x]` にしてください。";
+            "あなたは個人用TASKS.mdの整理係です。日本語Markdownで、未完了は - [ ]、完了済みは - [x] にしてください。";
         inputDoc.Tag(OUTPUT_PATH_TAG) = OUTPUT_PATH;
         inputDoc.Tag(OUTPUT_TITLE_TAG) = "TASKS案";
-
         editor.ExecuteMacro("call_gemini_api.js");
 
     } catch (e) {
-        alert("エラー: " + e.message);
+        showMacroMessage("エラー: " + e.message);
     }
 }
 
@@ -84,6 +112,11 @@ function buildPrompt() {
         + "- `✓` や `済:` は使わず `[x]` に統一する\n"
         + "- 空の項目は出さない\n"
         + "- TASKS.md本体を上書きする指示はしない\n\n"
+        + "重複・統合候補のルール:\n"
+        + "- 候補にする元タスク名は、入力にある表記を一字一句変えずに引用する\n"
+        + "- 候補は必ず次の形式で1行にする: `- 統合候補: 「元タスクA」 + 「元タスクB」 → 「統合後のタスク名」`\n"
+        + "- 元タスク名を完全に特定できない場合や、予定ID・期限・時刻付きの項目は候補にしない\n"
+        + "- 統合後の名前は短く具体的にする。元タスクのメモ・資料・期限を削除する提案はしない\n\n"
         + "出力形式:\n\n"
         + "# TASKS案\n\n"
         + "## 今日やる\n"
@@ -97,7 +130,7 @@ function buildPrompt() {
         + "## 確認が必要\n"
         + "- [ ] 項目\n\n"
         + "## 重複・統合候補\n"
-        + "- [ ] 項目A と 項目B は統合できそう\n\n"
+        + "- 統合候補: 「元タスクA」 + 「元タスクB」 → 「統合後のタスク名」\n\n"
         + "## LOG化候補\n"
         + "- [x] 済み/記録に回してよさそうな項目\n\n"
         + "## 削ってもよさそうな項目\n"
@@ -268,4 +301,21 @@ function findOpenDocumentByFullName(fullPath) {
     }
 
     return null;
+}
+
+function chooseAIProvider() {
+    var shell = new ActiveXObject("WScript.Shell");
+    var selected = shell.Popup("使用するAIを選んでください。\n\n［はい］GPT API\n［いいえ］Gemini API\n［キャンセル］その他", 0, "TASKS整理", 3 + 32);
+    if (selected === 6) return "openai";
+    if (selected === 7) return "gemini";
+    if (selected === 2) {
+        var manual = shell.Popup("ブラウザー版ChatGPTを手動で使いますか？", 0, "TASKS整理", 4 + 32);
+        if (manual === 6) return "chatgpt";
+    }
+    return "";
+}
+function copyFileToClipboard(path) {
+    var shell = new ActiveXObject("WScript.Shell");
+    var command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"Get-Content -Raw -Encoding UTF8 -LiteralPath '" + path + "' | Set-Clipboard\"";
+    if (shell.Run(command, 0, true) !== 0) throw new Error("整理プロンプトをクリップボードへコピーできませんでした。");
 }

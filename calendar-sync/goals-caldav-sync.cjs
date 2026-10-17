@@ -360,6 +360,29 @@ function backupAndWrite(file,original,text){
   fs.writeFileSync(file.replace(/\.md$/i,'_backup_'+stamp+'.md'),original,{flag:'wx'});
   writeAtomic(file,text);
 }
+function loadTaskIdentityIntermediates(hub,tasksFile,identityFile,snapshots,apply){
+  const identityTime=fs.existsSync(identityFile)?fs.statSync(identityFile).mtimeMs:0;
+  const tasksTime=fs.statSync(tasksFile).mtimeMs+1000;
+  const candidates=fs.readdirSync(hub,{withFileTypes:true})
+    .filter(entry=>entry.isFile()&&/^TASKS_(?:before_(?:AI|Gemini)_apply|group_backup)_.*\.md$/i.test(entry.name))
+    .map(entry=>({file:path.join(hub,entry.name),mtime:fs.statSync(path.join(hub,entry.name)).mtimeMs}))
+    .filter(entry=>entry.mtime>identityTime&&entry.mtime<=tasksTime)
+    .sort((a,b)=>a.mtime-b.mtime)
+    .slice(-20);
+  let result=snapshots.slice();
+  for(const candidate of candidates){
+    try{
+      const text=fs.readFileSync(candidate.file,'utf8').replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n');
+      let counter=0;
+      const makeId=apply?taskCore.uuid:()=>crypto.createHash('sha256').update(candidate.file+'\0'+text+'\0'+(++counter)).digest('hex').slice(0,32);
+      const marked=taskIdentities.restore(text,result,makeId);
+      result=[marked,...result.filter(value=>value!==marked)].slice(0,20);
+    }catch(error){
+      // A backup that cannot be safely related is ignored; the normal fail-safe remains active.
+    }
+  }
+  return result;
+}
 function run(options={}){
   const hub=path.resolve(options.hub||DEFAULT_HUB),goalFile=path.join(hub,'GOALS.md'),tasksFile=path.join(hub,'TASKS.md'),dir=path.join(hub,'.mery-calendar');
   const reportPath=path.join(hub,'MERYTODO_CALDAV_REPORT.md');
@@ -371,6 +394,7 @@ function run(options={}){
   const assignedIds=parsed.assignedIds;
   const today=options.today||new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   const taskIdentityFile=path.join(dir,'caldav-tasks-ids.json');let taskIdentitySnapshots=taskIdentities.load(taskIdentityFile);
+  taskIdentitySnapshots=loadTaskIdentityIntermediates(hub,tasksFile,taskIdentityFile,taskIdentitySnapshots,!!options.apply);
   let taskParsed=parseTaskDocument(taskSource,taskIdentitySnapshots,{apply:!!options.apply,file:tasksFile});
   const linksFile=path.join(dir,'goals-task-links.json'),links=loadGoalTaskLinks(linksFile);
   let linked;

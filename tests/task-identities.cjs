@@ -21,6 +21,21 @@ test('mixed edit, addition and deletion in one subsection preserve the edited ta
  assert.notEqual(parsed.find(x=>x.text==='newly added').id,'b'.repeat(32));
  assert.equal(parsed.some(x=>x.id==='b'.repeat(32)),false);
 });
+test('distinctive tasks keep IDs when moved and renamed together across dates and sections',()=>{
+ const oldText='## 2026-10-03 (土) 今日の作業\n### 今日やる\n- [ ] Prepare annual reimbursement documentation for Tokyo office <!-- mery-calendar:'+ 'c'.repeat(32)+' -->\n## 2026-10-04 (日) 今日の作業\n### 後で\n- [ ] Schedule pediatric dentist appointment for Tuesday morning <!-- mery-calendar:'+'d'.repeat(32)+' -->\n## 2026-10-05 (月) 今日の作業\n### 今日やる\n- [ ] Unchanged anchored task <!-- mery-calendar:'+'e'.repeat(32)+' -->\n';
+ const current='## 2026-10-06 (火) 今日の作業\n### 後で\n- [ ] Schedule pediatric dentist appointment for Wednesday morning\n## 2026-10-07 (水) 今日の作業\n### 今日やる\n- [ ] Prepare annual reimbursement documentation for Osaka office\n## 2026-10-05 (月) 今日の作業\n### 今日やる\n- [ ] Unchanged anchored task\n';
+ const restored=items(identities.restore(current,[oldText]));
+ assert.equal(restored.find(x=>x.text.includes('Osaka office')).id,'c'.repeat(32));
+ assert.equal(restored.find(x=>x.text.includes('Wednesday morning')).id,'d'.repeat(32));
+ assert.equal(restored.find(x=>x.text==='Unchanged anchored task').id,'e'.repeat(32));
+});
+test('unrelated cross-date additions and deletions do not masquerade as moved edits',()=>{
+ const oldText='## 2026-10-03 (土) 今日の作業\n### 今日やる\n- [ ] Visit the city office and bring the application papers <!-- mery-calendar:'+ 'f'.repeat(32)+' -->\n## 2026-10-04 (日) 今日の作業\n### 今日やる\n- [ ] Renew the library card before closing <!-- mery-calendar:'+'g'.repeat(32)+' -->\n';
+ const current='## 2026-10-05 (月) 今日の作業\n### 今日やる\n- [ ] Buy vegetables on the way home\n## 2026-10-06 (火) 今日の作業\n### 今日やる\n- [ ] Water the balcony plants\n';
+ const restored=items(identities.restore(current,[oldText]));
+ assert.equal(restored.length,2);
+ assert.ok(restored.every(x=>!['f'.repeat(32),'g'.repeat(32)].includes(x.id)));
+});
 test('duplicate deletion and ambiguous bulk changes stop before sync',()=>{
  const duplicate=initial.replace('beta','alpha');assert.throws(()=>identities.restore(identities.strip(duplicate).replace('- [ ] alpha\n',''),[duplicate]),/重複/);
  const unrelated=initial.replace('alpha','north').replace('beta','south');assert.throws(()=>identities.restore(identities.strip(unrelated),[initial]),/曖昧/);

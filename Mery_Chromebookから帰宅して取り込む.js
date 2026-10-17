@@ -1,43 +1,118 @@
 #title = "Chromebookから帰宅してTASKSを取り込む"
 var HUB_DIR = "C:\\Projects\\ai-work-hub";
-var MODE = "--import";
 runTravel();
 
 function runTravel() {
     try {
         var fso = new ActiveXObject("Scripting.FileSystemObject");
-        var folder = new ActiveXObject("Shell.Application").BrowseForFolder(0, "外出時に使ったGoogle Driveフォルダーを選択してください", 0);
-        if (!folder) return;
-        var travel = folder.Self.Path;
-        if (!fso.FileExists(fso.BuildPath(travel, "TASKS.md"))) throw new Error("選択フォルダーにTASKS.mdがありません。");
-        if (!Confirm("Chromebook側のTASKS.mdと、リンクされたメモ・資料の変更をWindowsへ取り込みます。\nWindows側も同じファイルを外出後に変更していれば、安全のため自動取り込みを止めます。\n\n選択先: " + travel + "\n\n続けますか？")) return;
-        saveTasks();
+        ensureOnline();
+        var travel = getTravelFolder(fso);
+        var tasksDoc = resolveTasksDocument(fso);
+        if (!fso.FolderExists(travel) || !fso.FileExists(fso.BuildPath(travel, "TASKS.md"))) throw new Error("Google Driveの Mery Chromebook\\TASKS.md が見つかりません。外出時の書き出しとDrive同期が完了しているか確認してください。");
+        var timestampGuide = getImportTimestampGuide(fso, travel);
+        if (!confirmAction("Chromebook側のTASKS.mdとリンクされたメモ・資料を Windows へ取り込みます。\nWindows側で同じファイルを外出後に変更していた場合、安全のため自動取り込みを止めます。\n\n読み込み元: " + travel + "\nWindows側: " + tasksDoc.FullName + "\n\n" + timestampGuide + "\n\n続けますか？")) return;
+        saveTasks(fso, tasksDoc);
         var node = new ActiveXObject("WScript.Shell").ExpandEnvironmentStrings("%ProgramFiles%\\nodejs\\node.exe");
         var worker = fso.BuildPath(fso.GetParentFolderName(ScriptFullName), "calendar-sync\\chromebook-travel.cjs");
         if (!fso.FileExists(node) || !fso.FileExists(worker)) throw new Error("Node.js またはChromebook連携スクリプトが見つかりません。");
-        var code = new ActiveXObject("WScript.Shell").Run(quote(node) + " " + quote(worker) + " --hub " + quote(HUB_DIR) + " --travel " + quote(travel) + " " + MODE, 0, true);
-        if (code !== 0) throw new Error("取り込みを中止しました。Windows側との競合がないか確認してください。TASKS.md は上書きしていません。");
-        reloadTasks();
-        alert("ChromebookのTASKS・リンクされたメモ・資料を取り込みました。変更前のバックアップを作成し、Google Tasks / Google カレンダー / Thunderbird用のIDも維持しました。\n\n内容を確認した後、作業メニューから必要な同期を実行してください。Google同期とThunderbird同期は各レポートを確認してから反映してください。");
-    } catch (e) { alert("帰宅時の取り込みに失敗しました: " + e.message); }
+        Status = "Chromebookの変更を Google Drive から取り込み中...";
+        var shell = new ActiveXObject("WScript.Shell");
+        var code = shell.Run(quote(node) + " " + quote(worker) + " --hub " + quote(HUB_DIR) + " --travel " + quote(travel) + " --import", 0, true);
+        var status = readStatus(fso.BuildPath(HUB_DIR, ".mery-calendar\\chromebook-travel-status.txt"));
+        if (code !== 0) throw new Error(status || "取り込みを中止しました。競合がないか確認してください。TASKS.md は上書きしていません。");
+        reloadTasks(fso, tasksDoc);
+        showMessage((status || "外出データを取り込みました。") + "\n\n変更前のバックアップを作成しました。内容を確認した後、必要な同期を実行してください。");
+    } catch (e) { showMessage("帰宅時の取り込みに失敗しました: " + e.message + "\n\nネット接続とGoogle Drive for desktopのログイン・同期状態を確認してください。ChromebookからのDrive同期が完了してから、オンライン状態で再実行してください。"); }
 }
 
-function saveTasks() {
-    var target = HUB_DIR + "\\TASKS.md", fso = new ActiveXObject("Scripting.FileSystemObject");
-    for (var i = 0; i < editor.Documents.Count; i++) {
-        var doc = editor.Documents.Item(i);
-        if (doc.FullName && fso.GetAbsolutePathName(doc.FullName).toLowerCase() === fso.GetAbsolutePathName(target).toLowerCase()) {
-            if (!doc.Saved) doc.Save(doc.FullName);
-            return;
-        }
+function ensureOnline() {
+    try {
+        var request = new ActiveXObject("WinHttp.WinHttpRequest.5.1");
+        request.SetTimeouts(2000, 2000, 3000, 3000);
+        request.Open("GET", "https://www.google.com/generate_204", false);
+        request.Send();
+        if (request.Status !== 204) throw new Error("Googleへの接続確認が完了しませんでした（HTTP " + request.Status + "）。Windowsがオフラインか、ネットワークで接続が制限されています。");
+    } catch (e) {
+        throw new Error("Google Driveの同期前にオンライン接続を確認できません。Windowsのネット接続とGoogle Drive for desktopのログインを確認し、オンラインに戻ってから再実行してください。詳細: " + e.message);
     }
 }
-function reloadTasks() {
-    var fso = new ActiveXObject("Scripting.FileSystemObject"), target = fso.GetAbsolutePathName(HUB_DIR + "\\TASKS.md").toLowerCase();
-    for (var i = 0; i < editor.Documents.Count; i++) {
-        var doc = editor.Documents.Item(i);
-        if (doc.FullName && fso.GetAbsolutePathName(doc.FullName).toLowerCase() === target) { doc.Text = loadImportedText(doc.FullName); doc.Saved = true; }
+function getTravelFolder(fso) {
+    var drives = new Enumerator(fso.Drives);
+    var roots = [];
+    var existing = [];
+    while (!drives.atEnd()) {
+        var drive = drives.item(); drives.moveNext();
+        try {
+            if (drive.IsReady && String(drive.VolumeName).toLowerCase() === "google drive") {
+                var myDrive = drive.DriveLetter + ":\\My Drive";
+                if (fso.FolderExists(myDrive)) {
+                    roots.push(myDrive);
+                    var candidate = fso.BuildPath(myDrive, "Mery Chromebook");
+                    if (fso.FolderExists(candidate)) existing.push(candidate);
+                }
+            }
+        } catch (ignore) {}
     }
+    if (roots.length === 0) throw new Error("Google Drive for desktop の同期ドライブが見つかりません。アプリを起動してログインし、マイドライブがエクスプローラーで開ける状態にしてから再実行してください。");
+    if (existing.length === 1) return existing[0];
+    if (existing.length > 1 || roots.length > 1) throw new Error("Google Driveの保存先を一つに決められません。接続を確認し、保存先を一つにしてください。");
+    var travel = fso.BuildPath(roots[0], "Mery Chromebook");
+    if (!fso.FolderExists(travel)) {
+        try { fso.CreateFolder(travel); }
+        catch (e) { throw new Error("Google Driveの保存先を作成できません: " + travel + "。Driveの接続状態を確認してください。詳細: " + e.message); }
+    }
+    return travel;
+}
+function getImportTimestampGuide(fso, travel) {
+    var taskPath = fso.BuildPath(travel, "TASKS.md");
+    var metaPath = fso.BuildPath(travel, ".mery-chromebook-travel.json");
+    if (!fso.FileExists(taskPath) || !fso.FileExists(metaPath)) return "タイムスタンプ確認: 外出時の基準時刻またはTASKS更新時刻がありません。Drive同期状況を確認してください。";
+    try {
+        var meta = JSON.parse(readStatus(metaPath).replace(/^\uFEFF/, ""));
+        var exportedAt = new Date(meta.exportedAt);
+        var taskAt = new Date(fso.GetFile(taskPath).DateLastModified);
+        if (isNaN(exportedAt.getTime()) || isNaN(taskAt.getTime())) return "タイムスタンプ確認: 時刻を読み取れません。Drive同期状況を確認してください。";
+        if (taskAt.getTime() > exportedAt.getTime() + 2000) return "外出時より新しいTASKS更新時刻を検出しました: " + formatTimestamp(taskAt) + "。Chromebook側の更新がこのPCに届いた目安です。取り込み前にDrive for desktopの同期状況で最新になっていることを確認してください。";
+        return "TASKSの更新時刻: " + formatTimestamp(taskAt) + " / 外出時の基準時刻: " + formatTimestamp(exportedAt) + "。外出後の更新時刻はまだ検出していません。Chromebookで編集した場合はDrive同期を待ち、更新時刻が進んでから再実行してください。編集していない場合はそのまま続けられます。";
+    } catch (e) { return "タイムスタンプ確認に失敗しました: " + e.message + "。取り込み前にDrive同期状況を確認してください。"; }
+}
+function formatTimestamp(value) {
+    function pad(number) { return number < 10 ? "0" + number : String(number); }
+    return value.getFullYear() + "/" + pad(value.getMonth() + 1) + "/" + pad(value.getDate()) + " " + pad(value.getHours()) + ":" + pad(value.getMinutes()) + ":" + pad(value.getSeconds());
+}
+function resolveTasksDocument(fso) {
+    var target = fso.GetAbsolutePathName(HUB_DIR + "\\TASKS.md").toLowerCase();
+    var meryEditor = getMeryEditor();
+    var active = meryEditor.ActiveDocument;
+    if (active && active.FullName && fso.GetFileName(active.FullName).toLowerCase() === "tasks.md") {
+        var activePath = fso.GetAbsolutePathName(active.FullName).toLowerCase();
+        if (activePath !== target) throw new Error("表示中のTASKS.mdとマクロのコピー元が違います。表示中: " + active.FullName + " / コピー元: " + fso.GetAbsolutePathName(HUB_DIR + "\\TASKS.md") + "。正しいTASKS.mdを開いてから再実行してください。");
+        return active;
+    }
+    for (var i = 0; i < meryEditor.Documents.Count; i++) {
+        var doc = meryEditor.Documents.Item(i);
+        if (doc.FullName && fso.GetAbsolutePathName(doc.FullName).toLowerCase() === target) return doc;
+    }
+    throw new Error("コピー元のTASKS.mdがMeryで開かれていません: " + fso.GetAbsolutePathName(HUB_DIR + "\\TASKS.md") + "。正しいファイルを開いて再実行してください。");
+}
+function saveTasks(fso, doc) {
+    if (!doc || !doc.FullName) throw new Error("コピー元のTASKS.mdを確認できません。");
+    if (!doc.Saved) doc.Save(doc.FullName);
+    if (!doc.Saved) throw new Error("表示中のTASKS.mdを保存できませんでした。コピーを中止しました。");
+    var diskText = readTaskFile(doc.FullName);
+    if (normalizeTaskText(doc.Text) !== normalizeTaskText(diskText)) throw new Error("保存後のTASKS.mdがMeryの表示内容と一致しません。コピーを中止しました。");
+}
+function readTaskFile(path) {
+    var stream = new ActiveXObject("ADODB.Stream");
+    try { stream.Type = 2; stream.Charset = "utf-8"; stream.Open(); stream.LoadFromFile(path); return stream.ReadText().replace(/^\uFEFF/, ""); }
+    finally { if (stream.State !== 0) stream.Close(); }
+}
+function normalizeTaskText(value) { return String(value).replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n"); }
+function reloadTasks(fso, doc) {
+    var target = fso.GetAbsolutePathName(HUB_DIR + "\\TASKS.md").toLowerCase();
+    if (!doc || !doc.FullName || fso.GetAbsolutePathName(doc.FullName).toLowerCase() !== target) throw new Error("取り込み先のTASKS.mdが表示中の文書と一致しません。Meryの内容は更新しませんでした。");
+    doc.Text = loadImportedText(doc.FullName);
+    doc.Saved = true;
 }
 function loadImportedText(path) {
     var stream = new ActiveXObject("ADODB.Stream");
@@ -45,3 +120,20 @@ function loadImportedText(path) {
     finally { if (stream.State !== 0) stream.Close(); }
 }
 function quote(value) { if (/["\r\n%]/.test(value)) throw new Error("パスに対応していない文字があります。"); return '"' + value + '"'; }
+function readStatus(path) {
+    if (!new ActiveXObject("Scripting.FileSystemObject").FileExists(path)) return "";
+    var stream = new ActiveXObject("ADODB.Stream");
+    try { stream.Type=2; stream.Charset="utf-8"; stream.Open(); stream.LoadFromFile(path); return stream.ReadText(); }
+    finally { if (stream.State !== 0) stream.Close(); }
+}
+function getMeryEditor() {
+    if (typeof Editor !== "undefined") return Editor;
+    if (typeof editor !== "undefined") return editor;
+    throw new Error("Meryのエディターオブジェクトを取得できません。");
+}
+function confirmAction(message) {
+    return new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 4 + 32) === 6;
+}
+function showMessage(message) {
+    new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 0x30);
+}

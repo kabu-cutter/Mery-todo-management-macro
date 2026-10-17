@@ -194,20 +194,38 @@ function cleanTaskForCopy(line) {
 }
 
 function taskHeadingKey(line) {
-    return String(line || "").replace(/^[-*]\s+\[[ xX]\]\s*/, "")
+    var value = String(line || "").replace(/^[-*]\s+\[[ xX]\]\s*/, "")
         .replace(/\s*<!--\s*mery-calendar:[a-f0-9]+\s*-->/ig, "")
         .replace(/\s*<!--\s*mery-due:[^>]*-->\s*/ig, " ")
         .replace(/\s+\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+[AP]M(?:\s*[-–—]\s*\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+[AP]M)?\s*$/i, "")
-        .replace(/\s+@(?:[01]\d|2[0-3]):[0-5]\d(?:-(?:[01]\d|2[0-3]):[0-5]\d)?\s*$/, "")
-        .normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+        .replace(/\s+@(?:[01]\d|2[0-3]):[0-5]\d(?:-(?:[01]\d|2[0-3]):[0-5]\d)?\s*$/, "");
+    return normalizeHeadingForCompare(value);
+}
+
+function normalizeHeadingForCompare(value) {
+    value = String(value || "");
+    if (typeof value.normalize === "function") {
+        try {
+            value = value.normalize("NFKC");
+        } catch (e) {
+        }
+    } else {
+        // Mery の JScript には String.normalize がないため、
+        // 全角ASCIIと全角スペースだけ互換変換する。
+        value = value.replace(/[\uFF01-\uFF5E]/g, function (ch) {
+            return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+        }).replace(/\u3000/g, " ");
+    }
+    return value.replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "").toLowerCase();
 }
 
 function sameTaskHeading(left, right) {
     if (!left || !right) return false;
     if (left === right) return true;
-    var a = Array.from(left), b = Array.from(right);
+    // Array.from は古い JScript にないため split を使う。
+    var a = String(left).split(""), b = String(right).split("");
     function extension(shortText, longChars) {
-        var shortChars = Array.from(shortText);
+        var shortChars = String(shortText).split("");
         if (shortChars.length < 4 || shortChars.length >= longChars.length) return false;
         for (var i = 0; i < shortChars.length; i++) if (shortChars[i] !== longChars[i]) return false;
         return /^[\s、，。:：;；\-–—([{【「『]/.test(longChars[shortChars.length]);

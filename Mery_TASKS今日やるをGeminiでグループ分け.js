@@ -1,110 +1,210 @@
-﻿#title = "今日やるをGeminiでグループ分け"
+#title = "今日やるをGPTまたはGeminiでグループ分け"
 var HUB_DIR="C:\\Projects\\ai-work-hub";
 var TASKS_PATH=HUB_DIR+"\\TASKS.md";
 var INPUT_PATH=HUB_DIR+"\\グループ整理入力.md";
 var OUTPUT_PATH=HUB_DIR+"\\グループ案.md";
+var OPENAI_CALL_MACRO="call_openai_api.js";
 var PREVIEW_PATH=HUB_DIR+"\\グループ反映プレビュー.md";
 var STATE_PATH=HUB_DIR+"\\.mery-calendar\\gemini-groups.json";
+var PENDING_REQUEST_PATH=HUB_DIR+"\\.mery-calendar\\pending-mery-ai-request.json";
 var SELECTED_TEMPLATE_PROMPT_TAG="gemini-selected-template-prompt";
 var TEMPORARY_CUSTOM_INSTRUCTION_TAG="gemini-temporary-custom-instruction";
 var OUTPUT_PATH_TAG="gemini-output-path";
 var OUTPUT_TITLE_TAG="gemini-output-title";
+function showMacroMessage(message) {
+    new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 48);
+}
+
+function confirmMacroYesNo(message) {
+    return new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 4 + 32) === 6;
+}
 main();
 function main(){
     try {
-        var menu=CreatePopupMenu();
-        menu.Add("Geminiにグループ分け案を作ってもらう",1);
-        menu.Add("グループ案をTASKSの表示でプレビュー",2);
-        menu.Add("確認したグループ案をTASKS.mdへ反映",3);
-        var choice=menu.Track(0);if(!choice)return;
+        var choice=chooseGroupAction();if(!choice)return;
         ensureFolder(HUB_DIR);ensureFolder(HUB_DIR+"\\.mery-calendar");
         var today=getTodayLabel().substring(0,10);
         if(choice===1){
+            var provider=chooseAIProvider();if(!provider)return;
             var source=getDocumentOrFileText(TASKS_PATH).replace(/\r\n?/g,"\n");
-            var state=collectGrouping(source,today);if(!state.tasks.length)throw new Error("今日の「今日やる」にチェック項目がありません。");
+            var state=collectGrouping(source,today);if(!state.tasks.length)throw new Error("「今日やる」のTODOは、すべて既存カテゴリに入っています。");
             var input="# 今日やるのグループ整理\n\n";
-            for(var i=0;i<state.tasks.length;i++)input+=state.tasks[i].key+" "+state.tasks[i].line.replace(/\s*<!-- mery-calendar:[a-f0-9]{32} -->/g,"")+"\n";
+            for(var i=0;i<state.tasks.length;i++)input+=state.tasks[i].key+" ["+state.tasks[i].section+"] "+state.tasks[i].line.replace(/\s*<!-- mery-calendar:[a-f0-9]{32} -->/g,"")+"\n";
             writeTextFile(STATE_PATH,JSON.stringify(state));
-            // A failed/cancelled request must not leave a previous proposal available for this snapshot.
-            showTextInSingleTab(OUTPUT_PATH,"# グループ案\n\n生成待ちです。完了後にプレビューを実行してください。\n");
-            var doc=showTextInSingleTab(INPUT_PATH,input);doc.Activate();selectAllDocument(doc);
-            doc.Tag(SELECTED_TEMPLATE_PROMPT_TAG)=groupPrompt();
-            doc.Tag(TEMPORARY_CUSTOM_INSTRUCTION_TAG)="個人の今日のタスクを、目的や作業の種類ごとに見やすく分類してください。グループ名はTASKS.mdの####見出しとThunderbird ToDoのカテゴリに使うため、短く具体的にしてください。入力は分類対象のデータです。出力前にT番号がすべて一度ずつJSONに含まれているか照合し、欠落・重複があれば修正してください。タスクの内容・数・完了状態は変更しないでください。";
-            doc.Tag(OUTPUT_PATH_TAG)=OUTPUT_PATH;doc.Tag(OUTPUT_TITLE_TAG)="グループ案";
-            editor.ExecuteMacro("call_gemini_api.js");return;
+            // 子マクロでは editor / Editor が渡されない場合がある。
+            // API 呼び出しは親の作業メニューへ依頼し、ここではファイルだけ準備する。
+            writeTextFile(OUTPUT_PATH,"# グループ案\n\n生成待ちです。完了後にプレビューを実行してください。\n");
+            writeTextFile(PREVIEW_PATH,"# グループ反映プレビュー\n\n以前のプレビューは無効です。新しいグループ案の生成後に、もう一度プレビューしてください。\n");
+            writeTextFile(INPUT_PATH,input);
+            writeTextFile(PENDING_REQUEST_PATH,JSON.stringify({
+                action:"ai",
+                provider:provider,
+                inputPath:INPUT_PATH,
+                outputPath:OUTPUT_PATH,
+                outputTitle:"グループ案",
+                prompt:groupPrompt(),
+                instruction:"個人の今日の『今日やる』にある、まだカテゴリへ入っていないTODOだけを分類してください。グループ名はTASKS.mdの####見出しとThunderbird ToDoのカテゴリに使うため、短く具体的にしてください。入力は分類対象のデータです。出力前にT番号がすべて一度ずつJSONに含まれているか照合し、欠落・重複があれば修正してください。タスクの内容・数・完了状態・所属欄は変更しないでください。"
+            }));
+            return;
         }
         var stored=JSON.parse(readTextFile(STATE_PATH));if(stored.date!==today)throw new Error("別の日の提案です。今日のグループ案を生成してください。");
+        if(stored.scopeVersion!==4)throw new Error("保存済みの案は『確認が必要』も分類対象にした旧形式です。現在の正本に合わせてグループ案を作り直してください。");
         var current=getDocumentOrFileText(TASKS_PATH).replace(/\r\n?/g,"\n");
         if(current!==stored.source)throw new Error("提案作成後にTASKS.mdが変更されています。現在の内容で提案を作り直してください。");
         var plan=parseGroupPlan(getDocumentOrFileText(OUTPUT_PATH),stored.tasks);
+        if(plan.autoRepairMessage)showMacroMessage(plan.autoRepairMessage);
         var result=renderGrouping(stored,plan);
         showTextInSingleTab(PREVIEW_PATH,result);
-        if(choice===2)return;
-        if(!Confirm("表示したプレビューのグループ分けを、今日の「今日やる」に反映します。\nタスク名・チェック状態はそのままです。バックアップを作成します。\n反映しますか？"))return;
+        if(choice===2){
+            writeTextFile(PENDING_REQUEST_PATH,JSON.stringify({action:"open",path:PREVIEW_PATH}));
+            return;
+        }
+        if(!confirmMacroYesNo("表示したプレビューのグループ分けを反映します。\n『今日やる』の未分類TODOだけを移動します。\n『次にやる』『後で』『置く』『確認が必要』と、既存の見出し・カテゴリ・メモ・入れ子項目は保持します。\nバックアップを作成します。\n反映しますか？"))return;
         if(getDocumentOrFileText(TASKS_PATH).replace(/\r\n?/g,"\n")!==stored.source)throw new Error("確認中にTASKS.mdが変更されました。提案を作り直してください。");
         var disk=readTextFile(TASKS_PATH),backup=HUB_DIR+"\\TASKS_group_backup_"+(new Date()).getTime()+".md";
         writeTextFile(backup,stored.source);
-        showTextInSingleTab(TASKS_PATH,result);
-        alert("グループ分けを反映しました。Thunderbirdと同期すると####見出し名がToDoカテゴリになります。Google同期のID対応もそのまま使えます。");
-    }catch(e){alert("グループ分け: "+e.message);}
+        writeOrUpdateText(TASKS_PATH,result);
+        showMacroMessage("グループ分けを反映しました。Thunderbirdと同期すると####見出し名がToDoカテゴリになります。Google同期のID対応もそのまま使えます。");
+    }catch(e){showMacroMessage("グループ分け: "+e.message);}
 }
-function groupPrompt(){return "タスクを内容に合わせて3〜6個程度の短い日本語グループに分類してください。少数なら少ないグループで構いません。完了項目は『完了』グループにまとめてください。タスク名やチェック状態は書き換えず、全てのT番号を必ず1回だけ使い、新規タスクを足さないでください。出力は次のJSONをjsonコードブロックで返してください。グループ名は例なので実際の内容に合わせてください。\n```json\n{\"groups\":[{\"name\":\"生活\",\"items\":[\"T001\"]},{\"name\":\"開発\",\"items\":[\"T002\"]}]}\n```\n";}
+function chooseAIProvider(){
+    var selected=new ActiveXObject("WScript.Shell").Popup("使用するAIを選んでください。\n\n［はい］GPT API\n［いいえ］Gemini API\n［キャンセル］中止",0,"グループ分け",3+32);
+    if(selected===6)return "openai";
+    if(selected===7)return "gemini";
+    return "";
+}
+function chooseGroupAction(){
+    var shell=new ActiveXObject("WScript.Shell");
+    var first=shell.Popup("グループ分けの操作を選んでください。\n\n［はい］AIにグループ分け案を作ってもらう\n［いいえ］プレビュー・反映へ進む\n［キャンセル］中止",0,"グループ分け",3+32);
+    if(first===6)return 1;
+    if(first!==7)return 0;
+    var second=shell.Popup("保存済みのグループ案をどうしますか？\n\n［はい］TASKSの表示でプレビュー\n［いいえ］確認済みの案をTASKS.mdへ反映\n［キャンセル］中止",0,"グループ分け",3+32);
+    if(second===6)return 2;
+    if(second===7)return 3;
+    return 0;
+}
+function groupPrompt(){return "『今日やる』にあるカテゴリ未設定のタスクを、内容に合わせて3〜6個程度の短い日本語グループに分類してください。『次にやる』『後で』『置く』『確認が必要』は分類対象ではありません。反映時も既存カテゴリとメモ構造は保持されます。少数なら少ないグループで構いません。完了項目は『完了』グループにまとめてください。タスク名やチェック状態は書き換えず、全てのT番号を必ず1回だけ使い、新規タスクを足さないでください。出力は次のJSONをjsonコードブロックで返してください。グループ名は例なので実際の内容に合わせてください。\n```json\n{\"groups\":[{\"name\":\"生活\",\"items\":[\"T001\"]},{\"name\":\"開発\",\"items\":[\"T002\"]}]}\n```\n";}
 function collectGrouping(source,date){
-    var lines=source.split("\n"),day=-1,end=lines.length,start=-1,stop=lines.length,i;
+    var lines=source.split("\n"),day=-1,end=lines.length,i;
     for(i=0;i<lines.length;i++)if(new RegExp("^##\\s+"+date+"(?:\\s|$)").test(lines[i])){if(day>=0)throw new Error("今日の日付見出しが重複しています。先に統合してください。");day=i;}
     if(day<0)throw new Error("今日のTASKS見出しがありません。");
     for(i=day+1;i<lines.length;i++)if(/^##\s/.test(lines[i])){end=i;break;}
-    for(i=day+1;i<end;i++)if(/^###\s+今日やる\s*$/.test(lines[i])){if(start>=0)throw new Error("今日やる欄が重複しています。");start=i+1;}
-    if(start<0)throw new Error("今日やる欄がありません。");stop=end;
-    for(i=start;i<end;i++)if(/^###\s/.test(lines[i])||/^---+\s*$/.test(lines[i])){stop=i;break;}
-    var tasks=[],notes=[],fence="",currentTask=null;
-    for(i=start;i<stop;i++){
-        var f=lines[i].match(/^\s*(`{3,}|~{3,})/);
-        if(f){if(!fence)fence=f[1][0];else if(fence===f[1][0])fence="";if(currentTask)currentTask.details.push(lines[i]);else notes.push(lines[i]);continue;}
-        if(fence){if(currentTask)currentTask.details.push(lines[i]);else notes.push(lines[i]);continue;}
-        if(/^####(?!#)/.test(lines[i])){currentTask=null;continue;}
-        if(/^[-*]\s+\[[ xX]\]\s+\S/.test(lines[i])){currentTask={key:"T"+padKey(tasks.length+1),line:lines[i],details:[]};tasks.push(currentTask);}
-        else if(currentTask&&(!lines[i].replace(/\s/g,"")||/^\s/.test(lines[i])||/^\s*(?:メモ|関連メモ|資料)[:：]/.test(lines[i])))currentTask.details.push(lines[i]);
-        else if(lines[i].replace(/\s/g,"")){currentTask=null;notes.push(lines[i]);}
+    var found={},sections=[],tasks=[];
+    for(i=day+1;i<end;i++){
+        var heading=lines[i].match(/^###\s+(今日やる)\s*$/);
+        if(!heading)continue;
+        var name=heading[1];
+        if(found[name])throw new Error(name+"欄が重複しています。");
+        var start=i+1,stop=end,j;
+        for(j=start;j<end;j++)if(/^###\s/.test(lines[j])||/^---+\s*$/.test(lines[j])){stop=j;break;}
+        var section={name:name,start:start,stop:stop,tasks:[],notes:[]};
+        collectGroupingSection(lines,section,tasks);
+        sections.push(section);found[name]=section;
     }
-    return {date:date,source:source,start:start,stop:stop,tasks:tasks,notes:notes};
+    if(!found["今日やる"])throw new Error("今日やる欄がありません。");
+    sections.sort(function(a,b){return a.start-b.start;});
+    return {scopeVersion:4,date:date,source:source,start:found["今日やる"].start,stop:found["今日やる"].stop,tasks:tasks,notes:[],sections:sections};
+}
+function collectGroupingSection(lines,section,allTasks){
+    var fence="",category="";
+    for(var i=section.start;i<section.stop;i++){
+        var f=lines[i].match(/^\s*(`{3,}|~{3,})/);
+        if(f){if(!fence)fence=f[1][0];else if(fence===f[1][0])fence="";continue;}
+        if(fence)continue;
+        var categoryHeading=lines[i].match(/^####(?!#)\s*(.*?)\s*$/);
+        if(categoryHeading){category=categoryHeading[1];continue;}
+        if(/^[-*]\s+\[[ xX]\]\s+\S/.test(lines[i])){
+            var blockEnd=findTaskBlockEnd(lines,i+1,section.stop);
+            if(!category){
+                var block=lines.slice(i,blockEnd);
+                var task={key:"T"+padKey(allTasks.length+1),line:lines[i],details:block.slice(1),blockLines:block,blockStart:i,blockEnd:blockEnd,section:section.name};
+                allTasks.push(task);section.tasks.push(task);
+            }
+            i=blockEnd-1;
+        }
+    }
+}
+function findTaskBlockEnd(lines,start,stop){
+    var fence="";
+    for(var i=start;i<stop;i++){
+        var f=lines[i].match(/^\s*(`{3,}|~{3,})/);
+        if(f){if(!fence)fence=f[1][0];else if(fence===f[1][0])fence="";continue;}
+        if(fence)continue;
+        if(/^####(?!#)/.test(lines[i])||/^[-*]\s+\[[ xX]\]\s+\S/.test(lines[i]))return i;
+    }
+    return stop;
 }
 function padKey(n){return n<10?"00"+n:n<100?"0"+n:""+n;}
 function parseGroupPlan(text,tasks){
     var m=text.match(/```json\s*([\s\S]*?)```/i);if(!m)throw new Error("提案のJSONが見つかりません。生成を完了させるか再生成してください。");
     var plan=JSON.parse(m[1]);if(!plan.groups||!plan.groups.length)throw new Error("グループがありません。");
-    var known={},seen={},names={},i,j,lastDuplicate={};for(i=0;i<tasks.length;i++)known[tasks[i].key]=tasks[i];
+    var known={},seen={},names={},i,j,total=0,duplicates=[],unknown=[],missing=[];for(i=0;i<tasks.length;i++)known[tasks[i].key]=tasks[i];
     for(i=0;i<plan.groups.length;i++){
         var g=plan.groups[i];if(typeof g.name!=="string"||!g.name.replace(/\s/g,"")||/[\r\n#<>]/.test(g.name)||g.name.length>40||names[g.name])throw new Error("グループ名は重複のない短い名前にしてください。");names[g.name]=true;
         if(Object.prototype.toString.call(g.items)!=="[object Array]"||!g.items.length)throw new Error("空のグループがあります。");
-        for(j=0;j<g.items.length;j++){var k=g.items[j];if(typeof k!=="string"||!known[k]||seen[k])throw new Error("タスク番号が重複・追加されています。");seen[k]=true;
-            var line=known[k].line;if(lastDuplicate[line]&&parseInt(lastDuplicate[line].substring(1),10)>parseInt(k.substring(1),10))throw new Error("同一内容の重複タスクは元の順序を保ってください。");lastDuplicate[line]=k;
+        for(j=0;j<g.items.length;j++){
+            var k=g.items[j];total++;
+            if(typeof k!=="string"||!known[k]){unknown.push(String(k));continue;}
+            if(seen[k])duplicates.push(k);else seen[k]=true;
         }
     }
-    var missing=[];for(i=0;i<tasks.length;i++)if(!seen[tasks[i].key])missing.push(tasks[i].key+"「"+tasks[i].line.replace(/^[-*]\s+\[[ xX]\]\s*/,"").replace(/\s*<!-- mery-calendar:[a-f0-9]{32} -->/g,"")+"」");
-    if(missing.length)throw new Error("Geminiの提案JSONからタスクが欠落しています: "+missing.join("、")+"\nグループ案.mdのJSONのいずれかのitemsへ追加して保存し、もう一度プレビューしてください。TASKS.mdは変更されていません。回避案として追加タスク用のグループを作ることもできます。");
+    for(i=0;i<tasks.length;i++)if(!seen[tasks[i].key])missing.push(tasks[i].key);
+    if(!unknown.length&&duplicates.length===1&&missing.length===1&&total===tasks.length){
+        var duplicateId=duplicates[0],missingId=missing[0],repaired=false;
+        for(i=plan.groups.length-1;i>=0&&!repaired;i--)for(j=plan.groups[i].items.length-1;j>=0;j--)if(plan.groups[i].items[j]===duplicateId){plan.groups[i].items[j]=missingId;repaired=true;break;}
+        plan.autoRepairMessage="AI回答の番号誤りを補正しました（重複 "+duplicateId+" → 欠落 "+missingId+"）。内容の分類先はプレビューで確認してください。";
+    }else if(unknown.length||duplicates.length){
+        throw new Error("タスク番号を照合できません。"+(duplicates.length?" 重複: "+duplicates.join(", "):"")+(unknown.length?" 不明: "+unknown.join(", "):"")+(missing.length?" 欠落: "+missing.join(", "):"")+"。グループ案を作り直してください。");
+    }else if(missing.length){
+        throw new Error("AIの提案JSONからタスクが欠落しています: "+missing.join("、")+"。グループ案を作り直してください。TASKS.mdは変更されていません。");
+    }
+    seen={};var lastDuplicate={};
+    for(i=0;i<plan.groups.length;i++)for(j=0;j<plan.groups[i].items.length;j++){
+        k=plan.groups[i].items[j];
+        if(!known[k]||seen[k])throw new Error("補正後もタスク番号を照合できません。グループ案を作り直してください。");
+        seen[k]=true;
+        var line=known[k].line;if(lastDuplicate[line]&&parseInt(lastDuplicate[line].substring(1),10)>parseInt(k.substring(1),10))throw new Error("同一内容の重複タスクは元の順序を保ってください。");lastDuplicate[line]=k;
+    }
     return plan;
 }
 function renderGrouping(state,plan){
-    var lookup={},out=[],i,j,k,task,details;
+    var lookup={},i;
     for(i=0;i<state.tasks.length;i++)lookup[state.tasks[i].key]=state.tasks[i];
+    var lines=state.source.split("\n");
+    var sections=state.sections||[{name:"今日やる",start:state.start,stop:state.stop,tasks:state.tasks,notes:state.notes}],result=[],cursor=0;
+    for(i=0;i<sections.length;i++){
+        result=result.concat(lines.slice(cursor,sections[i].start));
+        result=result.concat(renderGroupingSection(sections[i],plan,lookup,lines));
+        cursor=sections[i].stop;
+    }
+    return result.concat(lines.slice(cursor)).join("\n");
+}
+function renderGroupingSection(section,plan,lookup,lines){
+    if(!section.tasks.length)return lines.slice(section.start,section.stop);
+    var out=[],i,j,task,hasGroup,cursor=section.start,tasks=section.tasks.slice();
+    tasks.sort(function(a,b){return a.blockStart-b.blockStart;});
+    for(i=0;i<tasks.length;i++){
+        out=out.concat(lines.slice(cursor,tasks[i].blockStart));
+        cursor=tasks[i].blockEnd;
+    }
+    out=out.concat(lines.slice(cursor,section.stop));
+    if(out.length&&out[out.length-1].replace(/\s/g,""))out.push("");
     for(i=0;i<plan.groups.length;i++){
+        hasGroup=false;
+        for(j=0;j<plan.groups[i].items.length;j++){
+            task=lookup[plan.groups[i].items[j]];
+            if(task&&task.section===section.name){hasGroup=true;break;}
+        }
+        if(!hasGroup)continue;
         out.push("","#### "+plan.groups[i].name);
         for(j=0;j<plan.groups[i].items.length;j++){
             task=lookup[plan.groups[i].items[j]];
-            out.push(task.line);
-            details=task.details.slice();
-            // Boundary blank lines came from spacing between a task and its memo.
-            // Re-emitting them can break Markdown's list-item continuation and strand the memo.
-            while(details.length&&!details[0].replace(/\s/g,""))details.shift();
-            while(details.length&&!details[details.length-1].replace(/\s/g,""))details.pop();
-            for(k=0;k<details.length;k++)out.push(details[k]);
+            if(!task||task.section!==section.name)continue;
+            out=out.concat(task.blockLines);
         }
     }
-    if(state.notes.length){out.push("","#### 補足");for(i=0;i<state.notes.length;i++)out.push(state.notes[i]);}
-    out.push("");
-    var lines=state.source.split("\n");
-    return lines.slice(0,state.start).concat(out,lines.slice(state.stop)).join("\n");
+    if(!out.length||out[out.length-1].replace(/\s/g,""))out.push("");
+    return out;
 }
 function selectAllDocument(doc) {
     doc.selection.StartOfDocument(false);
@@ -127,8 +227,10 @@ function showTextInSingleTab(path, text) {
     }
 
     writeTextFile(path, text);
-    editor.NewFile();
-    d = editor.ActiveDocument;
+    var app = getMeryEditorOrNull();
+    if (!app) return null;
+    app.NewFile();
+    d = app.ActiveDocument;
     d.Text = text;
     d.Save(path);
     d.selection.StartOfDocument(false);
@@ -205,9 +307,31 @@ function normalizePath(path) {
 
 function findOpenDocumentByFullName(fullPath) {
     var target = normalizePath(fullPath);
-    for (var i = 0; i < editor.Documents.Count; i++) {
-        var d = editor.Documents.Item(i);
+    try {
+        if (typeof document !== "undefined" && document.FullName && normalizePath(document.FullName) === target) return document;
+    } catch (ignored) {}
+    var app = getMeryEditorOrNull();
+    if (!app) return null;
+    for (var i = 0; i < app.Documents.Count; i++) {
+        var d = app.Documents.Item(i);
         if (d.FullName && normalizePath(d.FullName) === target) return d;
     }
     return null;
+}
+
+function getMeryEditorOrNull() {
+    if (typeof Editor !== "undefined") return Editor;
+    if (typeof editor !== "undefined") return editor;
+    return null;
+}
+
+function writeOrUpdateText(path, text) {
+    var d = findOpenDocumentByFullName(path);
+    if (d) {
+        d.Text = text;
+        d.Save(path);
+        d.Activate();
+        return;
+    }
+    writeTextFile(path, text);
 }

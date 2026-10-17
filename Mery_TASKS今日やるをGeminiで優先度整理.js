@@ -1,7 +1,7 @@
-﻿#title = "TASKS今日やるをGeminiで優先度整理"
+﻿#title = "TASKS今日やるをGPTまたはGeminiで優先度整理"
 
 // Mery タスク管理 v0.6.5
-// TASKS.md の今日セクションから「今日やる」だけを抜き出し、Geminiに優先度案を作らせます。
+// TASKS.md の今日セクションから「今日やる」だけを抜き出し、GPTまたはGeminiに優先度案を作らせます。
 // TASKS.md本体は上書きしません。
 // 出力先: C:\Projects\ai-work-hub\PRIORITY案.md
 // call_gemini_api.js を利用します。
@@ -10,12 +10,20 @@ var HUB_DIR = "C:\\Projects\\ai-work-hub";
 var TASKS_PATH = HUB_DIR + "\\TASKS.md";
 var INPUT_PATH = HUB_DIR + "\\PRIORITY整理入力.md";
 var OUTPUT_PATH = HUB_DIR + "\\PRIORITY案.md";
+var OPENAI_CALL_MACRO = "call_openai_api.js";
 
 var SELECTED_TEMPLATE_PROMPT_TAG = "gemini-selected-template-prompt";
 var TEMPORARY_CUSTOM_INSTRUCTION_TAG = "gemini-temporary-custom-instruction";
 var OUTPUT_PATH_TAG = "gemini-output-path";
 var OUTPUT_TITLE_TAG = "gemini-output-title";
 
+function showMacroMessage(message) {
+    new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 48);
+}
+
+function confirmMacroYesNo(message) {
+    return new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery TODO", 4 + 32) === 6;
+}
 main();
 
 function main() {
@@ -28,7 +36,7 @@ function main() {
         var todayHeading = "## " + today + " 今日の作業";
 
         if (tasksText.indexOf(todayHeading) < 0) {
-            alert("今日のTASKSセクションが見つかりませんでした。");
+            showMacroMessage("今日のTASKSセクションが見つかりませんでした。");
             return;
         }
 
@@ -36,9 +44,12 @@ function main() {
         var todayTasks = extractSubsection(todayBlock, "今日やる");
 
         if (!todayTasks || todayTasks.replace(/\s/g, "").length === 0) {
-            alert("今日やる欄に優先度整理できるタスクが見つかりませんでした。");
+            showMacroMessage("今日やる欄に優先度整理できるタスクが見つかりませんでした。");
             return;
         }
+
+        var provider = chooseAIProvider();
+        if (!provider) return;
 
         var inputText = ""
             + "# PRIORITY整理入力\n\n"
@@ -57,12 +68,22 @@ function main() {
             "あなたは個人用TASKS.mdの優先度整理係です。ユーザーの負担を減らし、今日の作業順を現実的に並べてください。出力は日本語Markdown。未完了は `- [ ]`、完了済みは `- [x]` を使ってください。";
         inputDoc.Tag(OUTPUT_PATH_TAG) = OUTPUT_PATH;
         inputDoc.Tag(OUTPUT_TITLE_TAG) = "PRIORITY案";
+        inputDoc.Tag("gemini-output-kind") = provider === "openai" ? "OpenAI API" : "Gemini API";
 
-        editor.ExecuteMacro("call_gemini_api.js");
+        editor.ExecuteMacro(provider === "openai" ? OPENAI_CALL_MACRO : "call_gemini_api.js");
 
     } catch (e) {
-        alert("エラー: " + e.message);
+        showMacroMessage("エラー: " + e.message);
     }
+}
+
+function chooseAIProvider() {
+    var selected = new ActiveXObject("WScript.Shell").Popup(
+        "使用するAIを選んでください。\n\n［はい］GPT API\n［いいえ］Gemini API\n［キャンセル］中止",
+        0, "優先度整理", 3 + 32);
+    if (selected === 6) return "openai";
+    if (selected === 7) return "gemini";
+    return "";
 }
 
 function buildPrompt() {

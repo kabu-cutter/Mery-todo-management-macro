@@ -1,4 +1,4 @@
-# Mery Gemini Task Macro
+﻿# Mery Gemini Task Macro
 
 Mery Gemini Task Macro は、Windows 向けテキストエディタ **Mery** 上で、Markdown の `TASKS.md` / `LOG.md` / `OUTBOX.md` などを使って TODO 管理を行うためのマクロ集です。
 
@@ -28,23 +28,22 @@ Mery Gemini Task Macro は、Windows 向けテキストエディタ **Mery** 上
 
 TASKS.mdで同じ欄の項目を編集・追加・削除した場合も、変更前の保存状態と文面を照合してIDを引き継ぎます。編集と新規追加を安全に分けられない場合は、誤ったToDoへの同期を避けるため処理を止めます。
 
-## ChromebookでTASKSを使う（任意のDrive同期）
+## ChromebookでTASKSを使う（Drive for desktop）
 
-作業メニューには「外出: Chromebook用TASKSを書き出す」と「帰宅: ChromebookのTASKSを取り込む」があります。外出を選ぶと Google Drive for desktop の同期フォルダーを選ぶ画面が開き、`TASKS.md` とそこから参照している `img` / `notes` ファイルを書き出します。Chromebookではメモや資料も参照・編集できます。
+作業メニューの「外出: Chromebook用TASKSを書き出す」と「帰宅: ChromebookのTASKSを取り込む」を使います。Google Drive for desktopがエクスプローラーに表示されていれば、特別なDrive API設定なしで、Windowsの通常のファイル操作として転送できます。マクロはボリューム名「Google Drive」のマイドライブを自動検出し、その中の「Mery Chromebook」フォルダーを使います。Windowsがオフライン、またはDriveが利用できない場合はコピー・取り込みを中断して、再接続後の再実行方法を表示します。
 
 ### 外出・帰宅の操作
 
-1. Windowsで作業メニューから「外出: Chromebook用TASKSを書き出す」を選び、Google Drive for desktop の同期フォルダーを指定します。書き出し前に開いている `TASKS.md` は保存されます。
-2. Chromebookで同じGoogleアカウントを開き、Drive内の対象フォルダーをオフライン利用可能にします。Drive設定の「オフライン」を有効にした後、Chromebookの「ファイル」アプリで Google Drive を開き、対象フォルダーを選択して「オフラインで使用可能」をオンにします。チェックマークが付いたら準備完了です。詳しくは [Google公式のChromebook向け手順](https://support.google.com/chromebook/answer/2809731?hl=ja) を参照してください。
-3. 外出中はChromebook側の `TASKS.md` とリンク先ファイルを編集し、Windows側では同じファイルを編集しません。複数端末で同時に編集すると、Driveの同期競合が起きる場合があります。
-4. 帰宅後、Driveがオンライン同期を終えたら、作業メニューの「帰宅: ChromebookのTASKSを取り込む」を選び、外出時と同じフォルダーを指定します。競合がない場合は変更前バックアップを作成してから、TASKSとリンク先のメモ・資料を取り込みます。Windows側でも同じファイルを変更していた場合は、自動上書きを止めます。
-5. 取り込んだ内容を確認し、必要に応じてGoogle Tasks、Googleカレンダー、Thunderbird CalDAVの同期メニューを個別に実行します。帰宅操作が各サービスへ自動送信することはありません。
+1. Windowsでオンライン状態とGoogle Drive for desktopのログイン状態を確認し、「外出: Chromebook用TASKSを書き出す」を選びます。マクロが「Mery Chromebook」フォルダーを自動検出または作成します。
+2. マクロは表示中のTASKS.mdが作業ハブのTASKS.mdと同じパスであることを確認し、保存後に表示内容とディスク内容も照合してから、TASKS.mdとそこから参照しているimg / notesのファイルを自動検出した保存先へコピーします。別のTASKS.mdを表示している場合や、保存内容が一致しない場合はコピーを中止します。コピー先のTASKS.mdには同期IDコメントを表示せず、IDはWindows側のスナップショットから帰宅時に復元します。完了メッセージにはローカルコピーの更新時刻が表示されます。Driveアイコンの「同期状況」で対象ファイルが完了／最新になったことを確認してからChromebookで使います。
+3. Chromebookで同じGoogleアカウントを開き、Drive内の「Mery Chromebook」フォルダーをオフライン利用可能にします。Drive設定の「オフライン」を有効にした後、Chromebookの「ファイル」アプリでGoogle Driveを開き、対象フォルダーを選択して「オフラインで使用可能」をオンにします。チェックマークが付いたら準備完了です。詳しくは [Google公式のChromebook向け手順](https://support.google.com/chromebook/answer/2809731?hl=ja) を参照してください。
+4. 外出中はChromebook側のTASKS.mdとリンク先ファイルを編集し、Windows側では同じファイルを編集しません。
+5. 帰宅後、WindowsがオンラインでChromebookからのDrive同期が終わったことを確認し、「帰宅: ChromebookのTASKSを取り込む」を選びます。マクロは外出時の基準時刻とTASKS.mdの更新時刻を比較し、更新の有無と時刻を確認画面に表示します。Chromebookで編集したのに更新時刻が進んでいない場合は、Drive同期を待って再実行します。マクロが同じ「Mery Chromebook」フォルダーを自動検出します。競合がない場合は変更前バックアップを作成して取り込みます。Windows側でも変更していた場合は自動上書きを止めます。
+6. 取り込んだ内容を確認し、必要に応じてGoogle Tasks、Googleカレンダー、Thunderbird CalDAVの同期メニューを個別に実行します。帰宅操作が各サービスへ自動送信することはありません。
 
 ### マクロバーにボタンを置く
 
-作業メニューの「作業メニューのボタン追加案内」を使うと、メニュー全体を開くボタンをマクロバーに追加できます。外出と帰宅を個別のボタンにしたい場合は、「マクロのカスタマイズ」で `Mery_Chromebook外出用に書き出す.js` と `Mery_Chromebookから帰宅して取り込む.js` をそれぞれ登録し、マクロバーに表示します。どちらのボタンも、押したときだけ処理を開始します。
-
-この機能は選んだDriveフォルダーを介した任意のクラウド利用です。ローカルのTASKSを正本として保ち、外出時だけコピーして使います。メモ・資料はTASKSから参照しているファイルに限って持ち出します。未参照ファイルや `GOALS.md` / `LOG.md` はコピーしません。Driveへ置いた内容はGoogleアカウントに同期されるため、保存先を選ぶ前に取り扱いを確認してください。
+作業メニューの「作業メニューのボタン追加案内」を使うと、メニュー全体を開くボタンをマクロバーに追加できます。外出と帰宅を個別のボタンにしたい場合は、「マクロのカスタマイズ」で Mery_Chromebook外出用に書き出す.js と Mery_Chromebookから帰宅して取り込む.js をそれぞれ登録し、マクロバーに表示します。
 
 ## 今日の開始テンプレートと時刻付きTODO
 
@@ -289,6 +288,7 @@ OUTBOX.md
 TODO案.md
 LOG案.md
 TASKS案.md
+TASKS反映プレビュー.md
 PROJECT_TODO.md
 DAILY_REVIEW.md
 ```
@@ -309,6 +309,12 @@ DAILY_REVIEW.md
 - [ ] 未完了タスク
 - [x] 完了タスク
 ```
+
+### GeminiのTASKS案を反映する
+
+「TASKS.md今日分をGeminiで整理」で案を作成した後、作業メニューの「TASKS案を今日のTASKSへ反映」を選びます。対象日のTASKSが案の生成時から変わっていないことを確認し、反映プレビューを表示してから確認を求めます。TASKS.md全体のバックアップを作成し、今日のセクションだけを書き換えます。Gemini案で一致しない元TODOは「確認が必要」に保留し、元の同期ID・期限・メモ・資料行を維持します。
+
+統合候補は、元タスク名をそのまま引用した形式で出力された場合に1件ずつ確認できます。予定ID・期限・時刻などのメタデータ付き、元項目を特定できない、または形式が異なる候補は統合せず、反映プレビューの「保留した統合候補」に表示します。統合時は元のメモ行を新しい項目へ引き継ぎ、TASKS.md全体のバックアップも作成します。LOG化・削除候補は自動反映しません。既存のTASKS案が旧形式の場合は、Geminiで案を作り直すと新しい候補形式を使えます。
 
 ### 選択範囲をTASKSに追加する
 
@@ -401,6 +407,9 @@ C:\Projects\ai-work-hub\TASKS_backup_YYYYMMDD_HHMMSS.md
 
 マクロで整理・追記・LOG記録したタイミングで、基本的に `- [ ]` / `- [x]` に寄せます。
 
+## GPT APIを使う機能
+設定方法は [README_GPT_API.md](README_GPT_API.md) を参照してください。
+
 ## Gemini APIを使う機能
 
 Gemini API を使う主なマクロは以下です。
@@ -408,6 +417,7 @@ Gemini API を使う主なマクロは以下です。
 ```text
 Geminiタスク管理.js
 Mery_TASKS今日分をGeminiで整理.js
+Mery_TASKS案を今日のTASKSへ反映.js
 call_gemini_api.js
 ```
 
@@ -428,6 +438,7 @@ Mery_TASKS選択項目をLOGへ記録.js
 Mery_TASKS今日分の重複項目を整理.js
 Mery_プロジェクトTODOを読み込む.js
 Mery_TASKS今日分をGeminiで整理.js
+Mery_TASKS案を今日のTASKSへ反映.js
 Mery_LOG同日日付を統合.js
 Mery_日次レビューを作成.js
 Mery_OUTBOX選択範囲を末尾に反映.js
