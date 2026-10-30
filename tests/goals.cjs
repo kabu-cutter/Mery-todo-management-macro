@@ -3,6 +3,11 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const file=path.resolve(__dirname,'../Mery_目標管理.js');
 const source=fs.readFileSync(file,'utf8').replace(/^#.*$/gm,'').replace(/^main\s*\(\s*\)\s*;\s*$/m,'');
 const context=vm.createContext({});
+const errors=[];
+context.ActiveXObject=function(name){
+ assert.equal(name,'WScript.Shell');
+ return {Popup:message=>errors.push(message)};
+};
 vm.runInContext(source,context,{filename:file});
 
 test('annual goals append under the matching year and preserve other years',()=>{
@@ -53,13 +58,19 @@ test('guided wizard preserves multiple siblings at every hierarchy level',()=>{
 
 test('wizard input validation retries the same field until valid or cancelled',()=>{
  const inputs=['2026-02-30','2026-10-09'];
- const errors=[];
  context.prompt=()=>inputs.shift();
- context.alert=message=>errors.push(message);
+ errors.length=0;
  const output=context.goalPromptUntilValid('期限日','',value=>context.goalValidateDate(value));
  assert.equal(output,'2026-10-09');
  assert.equal(inputs.length,0);
  assert.deepEqual(errors,['実在する日付を入力してください。']);
+});
+
+test('goal macro uses Mery-compatible popups instead of alert',()=>{
+ assert.doesNotMatch(source,/\balert\s*\(/i);
+ errors.length=0;
+ context.macroMessage('通知テスト');
+ assert.deepEqual(errors,['通知テスト']);
 });
 
 test('time is optional and metadata survives schedule changes',()=>{

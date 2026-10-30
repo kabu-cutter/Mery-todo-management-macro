@@ -25,7 +25,7 @@ function main() {
         if (choice === 5) return setCurrentTaskSchedule(true);
         if (choice === 7) return syncGoalsCalDav();
     } catch (e) {
-        alert("目標管理: " + e.message);
+        macroMessage("目標管理: " + e.message);
     }
 }
 
@@ -97,9 +97,9 @@ function createGoalChain() {
         var updated = goalBuildWizardText(doc.Text, year, groups);
         saveGoalDocument(doc, updated);
         doc.Activate();
-        alert("目標とTODOを追加しました。\n同じ親の下に複数項目を作成できます。期限日と時間帯は任意です。");
+        macroMessage("目標とTODOを追加しました。\n同じ親の下に複数項目を作成できます。期限日と時間帯は任意です。");
     } catch (e) {
-        alert("目標を作成できませんでした。\n" + e.message);
+        macroMessage("目標を作成できませんでした。\n" + e.message);
     }
 }
 
@@ -123,7 +123,7 @@ function goalPromptUntilValid(message, initial, validate) {
             validate(value);
             return value;
         } catch (e) {
-            alert(e.message);
+            macroMessage(e.message);
         }
     }
 }
@@ -138,7 +138,7 @@ function openGoalsDocument() {
         var doc = openGoals();
         doc.Activate();
     } catch (e) {
-        alert("目標ファイルを開けませんでした。\n" + e.message);
+        macroMessage("目標ファイルを開けませんでした。\n" + e.message);
     }
 }
 
@@ -151,7 +151,7 @@ function syncGoalsCalDav() {
         if (!fso.FileExists(macro)) throw new Error("Thunderbird同期マクロが見つかりません: " + macro);
         editor.ExecuteMacro(macro);
     } catch (e) {
-        alert("MeryTODO CalDAV同期を開始できませんでした。\n" + e.message);
+        macroMessage("MeryTODO CalDAV同期を開始できませんでした。\n" + e.message);
     }
 }
 
@@ -165,9 +165,9 @@ function addAnnualGoal() {
         var updated = goalInsertAnnualGoal(doc.Text, year, title);
         saveGoalDocument(doc, updated);
         doc.Activate();
-        alert(year + "年の年間目標を追加しました。\n月目標は目標行にカーソルを置いて「選択した目標の下に追加」を使います。");
+        macroMessage(year + "年の年間目標を追加しました。\n月目標は目標行にカーソルを置いて「選択した目標の下に追加」を使います。");
     } catch (e) {
-        alert("年間目標を追加できませんでした。\n" + e.message);
+        macroMessage("年間目標を追加できませんでした。\n" + e.message);
     }
 }
 
@@ -176,7 +176,7 @@ function addChildGoal() {
         var doc = editor.ActiveDocument;
         if (!doc || !doc.FullName || goalFileName(doc.FullName) !== "goals.md") {
             openGoals();
-            alert("GOALS.md を開きました。親となる目標行にカーソルを置いて、もう一度実行してください。");
+            macroMessage("GOALS.md を開きました。親となる目標行にカーソルを置いて、もう一度実行してください。");
             return;
         }
         if (!doc.Saved) throw new Error("GOALS.md に未保存の変更があります。保存してから実行してください。");
@@ -203,9 +203,9 @@ function addChildGoal() {
         var updated = goalInsertChildAfter(doc.Text, parentLine, childLine);
         saveGoalDocument(doc, updated);
         doc.Activate();
-        alert(parent.childName + "を追加しました。");
+        macroMessage(parent.childName + "を追加しました。");
     } catch (e) {
-        alert("子目標 / TODO を追加できませんでした。\n" + e.message);
+        macroMessage("子目標 / TODO を追加できませんでした。\n" + e.message);
     }
 }
 
@@ -229,16 +229,20 @@ function setCurrentTaskSchedule(clear) {
         }
         var updatedLine = goalSetTaskSchedule(line, date, time);
         if (updatedLine === line) {
-            alert("期限日・時刻に変更はありません。");
+            macroMessage("期限日・時刻に変更はありません。");
             return;
         }
         var updatedText = goalReplaceCurrentLine(doc.Text, line, updatedLine);
         saveGoalDocument(doc, updatedText);
         doc.Activate();
-        alert(clear ? "期限日・時刻を解除しました。" : "期限日・時刻を設定しました。");
+        macroMessage(clear ? "期限日・時刻を解除しました。" : "期限日・時刻を設定しました。");
     } catch (e) {
-        alert("期限日・時刻を変更できませんでした。\n" + e.message);
+        macroMessage("期限日・時刻を変更できませんでした。\n" + e.message);
     }
+}
+
+function macroMessage(message) {
+    new ActiveXObject("WScript.Shell").Popup(String(message), 0, "Mery 目標管理", 0x30);
 }
 
 function openGoals() {
